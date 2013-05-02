@@ -20,13 +20,21 @@
 	org_name, org_displayname, org_url, tech_contact
 	}).
 
+ets_table_owner() ->
+	receive
+		stop -> ok;
+		_ -> ets_table_owner()
+	end.
+
 init(_Transport, Req, Options) ->
-	case ets:info(esaml_privkey_cache) of
-		undefined -> ets:new(esaml_privkey_cache, [set, public, named_table]);
-		_ -> ok
-	end,
-	case ets:info(esaml_certbin_cache) of
-		undefined -> ets:new(esaml_certbin_cache, [set, public, named_table]);
+	case {ets:info(esaml_privkey_cache), ets:info(esaml_certbin_cache)} of
+		{undefined, undefined} ->
+			spawn(fun() ->
+				register(esaml_cowboy_ets_table_owner, self()),
+				ets:new(esaml_privkey_cache, [set, public, named_table]),
+				ets:new(esaml_certbin_cache, [set, public, named_table]),
+				ets_table_owner()
+			end);
 		_ -> ok
 	end,
 
@@ -130,18 +138,26 @@ post([_ | [<<"consume">>]], Req, S = #state{}) ->
 			case (catch begin
 				[Assertion] = xmerl_xpath:string("/samlp:Response/saml:Assertion", Xml, [{namespace, Ns}]),
 				if S#state.sign_ass ->
-					ok = xmerl_dsig:verify(Xml, S#state.trusted),
-					ok = xmerl_dsig:verify(Assertion, S#state.trusted),
-					ok;
+					case xmerl_dsig:verify(Xml, S#state.trusted) of
+						ok -> ok;
+						OuterError -> error({outer_sig, OuterError})
+					end,
+					case xmerl_dsig:verify(Assertion, S#state.trusted) of
+						ok -> ok;
+						InnerError -> error({inner_sig, InnerError})
+					end;
 				true ->
 					ok
 				end,
+				ok = esaml:validate_assertion(Assertion, S#state.base_uri ++ "/metadata"),
+
 				Attrs = esaml:decode_attributes(Assertion),
 				Uid = proplists:get_value(uid, Attrs),
 				Output = io_lib:format("Hi there!\nYou appear to be ~p\nYour attributes: ~p\n\nThe assertion I got was:\n~p\n", [Uid, Attrs, xmerl_dsig:strip(Assertion)]),
 				cowboy_req:reply(200, [{<<"Content-Type">>, <<"text/plain">>}], Output, Req2)
 			end) of
 				{'EXIT', Reason} ->
+					error_logger:warning_report("Rejected SAML assertion for reason: ~p (req = ~p)", [Reason, Req2]),
 					cowboy_req:reply(403, <<"Invalid SAML assertion">>, Req2);
 				Other -> Other
 			end

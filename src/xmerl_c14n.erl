@@ -77,7 +77,7 @@ clean_sort_attrs(Attrs) ->
 %% @doc Returns the list of namespace prefixes "needed" by an element in canonical form
 %% @internal
 -spec needed_ns(Elem :: #xmlElement{}) -> [string()].
-needed_ns(E = #xmlElement{nsinfo = NsInfo, attributes = Attrs, content = Kids}) ->
+needed_ns(#xmlElement{nsinfo = NsInfo, attributes = Attrs}) ->
    NeededNs1 = case NsInfo of
       {Nas, _} -> [Nas];
       _ -> []
