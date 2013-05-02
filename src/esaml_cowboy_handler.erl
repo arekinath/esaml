@@ -155,7 +155,9 @@ post([_ | [<<"consume">>]], Req, S = #state{}) ->
 				true ->
 					ok
 				end,
-				ok = esaml:validate_assertion(Assertion, S#state.base_uri ++ "/metadata"),
+				ok = esaml:validate_assertion(Assertion,
+											  S#state.base_uri ++ "/consume",
+											  S#state.base_uri ++ "/metadata"),
 
 				{ok, Req3, ModState} = apply(S#state.module, init, [Req2]),
 				{ok, Req4, ModState2} = apply(S#state.module, handle_assertion, [Req3, Assertion, ModState]),

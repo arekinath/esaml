@@ -13,7 +13,7 @@
 -include("esaml.hrl").
 
 -export([datetime_to_saml/1, saml_to_datetime/1]).
--export([config/2, config/1, to_xml/1, decode_attributes/1, validate_assertion/2]).
+-export([config/2, config/1, to_xml/1, decode_attributes/1, validate_assertion/3]).
 -export([build_nsinfo/2]).
 
 %% @doc Converts a calendar:datetime() into SAML time string
@@ -82,9 +82,13 @@ ets_table_owner() ->
 	end.
 
 %% @doc Validates a SAML assertion
--spec validate_assertion(Assertion :: #xmlElement{}, Audience :: string()) -> ok.
-validate_assertion(Assertion, Audience) ->
+-spec validate_assertion(Assertion :: #xmlElement{}, Recipient :: string(), Audience :: string()) -> ok.
+validate_assertion(Assertion, Recipient, Audience) ->
 	Ns = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
+	case xmerl_xpath:string("saml:Subject/saml:SubjectConfirmation/saml:SubjectConfirmationData/@Recipient", Assertion, [{namespace, Ns}]) of
+		[#xmlAttribute{value = Recipient} | _] -> ok;
+		_ -> error(bad_recipient)
+	end,
 	case xmerl_xpath:string("saml:Conditions/saml:AudienceRestriction/saml:Audience/text()", Assertion, [{namespace, Ns}]) of
 		[] -> ok;
 		[#xmlText{value = Audience} | _] -> ok;
@@ -92,7 +96,7 @@ validate_assertion(Assertion, Audience) ->
 	end,
 	Now = erlang:localtime_to_universaltime(erlang:localtime()),
 	NowSecs = calendar:datetime_to_gregorian_seconds(Now),
-	DeathSecs = case xmerl_xpath:string("saml:Conditions/@NotOnOrAfter", Assertion, [{namespace, Ns}]) of
+	DeathSecs = case xmerl_xpath:string("saml:Subject/saml:SubjectConfirmation/saml:SubjectConfirmationData/@NotOnOrAfter", Assertion, [{namespace, Ns}]) of
 		[#xmlAttribute{value = MaxTime} | _] ->
 			DSecs = calendar:datetime_to_gregorian_seconds(saml_to_datetime(MaxTime)),
 			if (NowSecs > DSecs) ->
@@ -101,7 +105,13 @@ validate_assertion(Assertion, Audience) ->
 				DSecs
 			end;
 		_ ->
-			NowSecs + 10*3600
+			case xmerl_xpath:string("@IssueInstant", Assertion, [{namespace, Ns}]) of
+				[#xmlAttribute{value = IssueTime} | _] ->
+					IssueSecs = calendar:datetime_to_gregorian_seconds(saml_to_datetime(IssueTime)),
+					IssueSecs + 5*60;
+				_ ->
+					error(bad_timestamp)
+			end
 	end,
 	Digest = crypto:sha(xmerl_c14n:c14n(xmerl_dsig:strip(Assertion))),
 	{ResL, _BadNodes} = rpc:multicall(erlang, apply, [fun() ->
@@ -274,14 +284,30 @@ validate_assertion_test() ->
 	E1 = build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
 		attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}],
 		content = [
-			#xmlElement{name = 'saml:Conditions',
-				attributes = [#xmlAttribute{name = 'NotOnOrAfter', value = Death}],
-				content = [#xmlElement{name = 'saml:AudienceRestriction',
-					content = [#xmlElement{name = 'saml:Audience',
-						content = [#xmlText{value = "foo"}]}] }] } ]
+			#xmlElement{name = 'saml:Subject', content = [
+				#xmlElement{name = 'saml:SubjectConfirmation', content = [
+					#xmlElement{name = 'saml:SubjectConfirmationData',
+						attributes = [#xmlAttribute{name = 'Recipient', value = "foobar"},
+									  #xmlAttribute{name = 'NotOnOrAfter', value = Death}]
+					} ]} ]},
+			#xmlElement{name = 'saml:Conditions', content = [
+				#xmlElement{name = 'saml:AudienceRestriction', content = [
+					#xmlElement{name = 'saml:Audience', content = [#xmlText{value = "foo"}]}] }] } ]
 	}),
-	ok = validate_assertion(E1, "foo"),
-	{'EXIT', {bad_audience, _}} = (catch validate_assertion(E1, "something")).
+	ok = validate_assertion(E1, "foobar", "foo"),
+	{'EXIT', {bad_recipient, _}} = (catch validate_assertion(E1, "foo", "something")),
+	{'EXIT', {bad_audience, _}} = (catch validate_assertion(E1, "foobar", "something")),
+
+	E2 = build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
+		attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}],
+		content = [
+			#xmlElement{name = 'saml:Subject', content = [
+				#xmlElement{name = 'saml:SubjectConfirmation', content = [ ]} ]},
+			#xmlElement{name = 'saml:Conditions', content = [
+				#xmlElement{name = 'saml:AudienceRestriction', content = [
+					#xmlElement{name = 'saml:Audience', content = [#xmlText{value = "foo"}]}] }] } ]
+	}),
+	{'EXIT', {bad_recipient, _}} = (catch validate_assertion(E2, "", "")).
 
 validate_duplicate_assertion_test() ->
 	Now = erlang:localtime_to_universaltime(erlang:localtime()),
@@ -293,39 +319,45 @@ validate_duplicate_assertion_test() ->
 	E1 = build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
 		attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}],
 		content = [
-			#xmlElement{name = 'saml:Conditions',
-				attributes = [#xmlAttribute{name = 'NotOnOrAfter', value = Death}],
-				content = [#xmlElement{name = 'saml:AudienceRestriction',
-					content = [#xmlElement{name = 'saml:Audience',
-						content = [#xmlText{value = "testAudience"}]}] }] } ]
+			#xmlElement{name = 'saml:Subject', content = [
+				#xmlElement{name = 'saml:SubjectConfirmation', content = [
+					#xmlElement{name = 'saml:SubjectConfirmationData',
+						attributes = [#xmlAttribute{name = 'Recipient', value = "foobar"},
+									  #xmlAttribute{name = 'NotOnOrAfter', value = Death}]
+					} ]} ]},
+			#xmlElement{name = 'saml:Conditions', content = [
+				#xmlElement{name = 'saml:AudienceRestriction', content = [
+					#xmlElement{name = 'saml:Audience', content = [#xmlText{value = "testAudience"}]}] }] } ]
 	}),
 	Digest = crypto:sha(xmerl_c14n:c14n(xmerl_dsig:strip(E1))),
 
 	[] = ets:lookup(esaml_assertion_seen, Digest),
-	ok = validate_assertion(E1, "testAudience"),
+	ok = validate_assertion(E1, "foobar", "testAudience"),
 	[_] = ets:lookup(esaml_assertion_seen, Digest),
 	receive
 	after 500 ->
 		[_] = ets:lookup(esaml_assertion_seen, Digest),
-		{'EXIT', {duplicate_assertion, _}} = (catch validate_assertion(E1, "testAudience")),
+		{'EXIT', {duplicate_assertion, _}} = (catch validate_assertion(E1, "foobar", "testAudience")),
 		receive
 		after 2000 ->
 			[] = ets:lookup(esaml_assertion_seen, Digest),
-			{'EXIT', {stale_assertion, _}} = (catch validate_assertion(E1, "testAudience"))
+			{'EXIT', {stale_assertion, _}} = (catch validate_assertion(E1, "foobar", "testAudience"))
 		end
 	end.
 
 validate_stale_assertion_test() ->
 	Ns = #xmlNamespace{nodes = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
 	OldStamp = esaml:datetime_to_saml({{1990,1,1}, {1,1,1}}),
-	E2 = build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
+	E1 = build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
 		attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}],
 		content = [
-			#xmlElement{name = 'saml:Conditions',
-				attributes = [#xmlAttribute{name = 'NotOnOrAfter', value = OldStamp}],
-				content = [] } ]
+			#xmlElement{name = 'saml:Subject', content = [
+				#xmlElement{name = 'saml:SubjectConfirmation', content = [
+					#xmlElement{name = 'saml:SubjectConfirmationData',
+						attributes = [#xmlAttribute{name = 'Recipient', value = "foobar"},
+									  #xmlAttribute{name = 'NotOnOrAfter', value = OldStamp}]
+					} ]} ]} ]
 	}),
-	{'EXIT', {stale_assertion, _}} = (catch validate_assertion(E2, "foo")).
-
+	{'EXIT', {stale_assertion, _}} = (catch validate_assertion(E1, "foobar", "foo")).
 
 -endif.
