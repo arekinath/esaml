@@ -12,7 +12,8 @@
 -include_lib("public_key/include/public_key.hrl").
 -include("esaml.hrl").
 
--export([datetime_to_saml/1, config/2, config/1, to_xml/1, decode_attributes/1, validate_assertion/2]).
+-export([datetime_to_saml/1, saml_to_datetime/1]).
+-export([config/2, config/1, to_xml/1, decode_attributes/1, validate_assertion/2]).
 -export([build_nsinfo/2]).
 
 %% @doc Converts a calendar:datetime() into SAML time string
@@ -20,6 +21,13 @@
 datetime_to_saml(Time) ->
 	{{Y,Mo,D}, {H, Mi, S}} = Time,
 	lists:flatten(io_lib:format("~4.10.0B-~2.10.0B-~2.10.0BT~2.10.0B:~2.10.0B:~2.10.0BZ", [Y, Mo, D, H, Mi, S])).
+
+-spec saml_to_datetime(Stamp :: binary() | string()) -> calendar:datetime().
+saml_to_datetime(Stamp) ->
+	StampBin = if is_list(Stamp) -> list_to_binary(Stamp); true -> Stamp end,
+	<<YBin:4/binary-unit:8, "-", MoBin:2/binary-unit:8, "-", DBin:2/binary-unit:8, "T", HBin:2/binary-unit:8, ":", MiBin:2/binary-unit:8, ":", SBin:2/binary-unit:8, "Z">> = StampBin,
+	F = fun(B) -> list_to_integer(binary_to_list(B)) end,
+	{{F(YBin), F(MoBin), F(DBin)}, {F(HBin), F(MiBin), F(SBin)}}.
 
 %% @doc Retrieve a config record
 config(N) -> config(N, undefined).
@@ -82,16 +90,18 @@ validate_assertion(Assertion, Audience) ->
 		[#xmlText{value = Audience} | _] -> ok;
 		_ -> error(bad_audience)
 	end,
-	case xmerl_xpath:string("saml:Conditions/@NotOnOrAfter", Assertion, [{namespace, Ns}]) of
+	Now = erlang:localtime_to_universaltime(erlang:localtime()),
+	NowSecs = calendar:datetime_to_gregorian_seconds(Now),
+	DeathSecs = case xmerl_xpath:string("saml:Conditions/@NotOnOrAfter", Assertion, [{namespace, Ns}]) of
 		[#xmlAttribute{value = MaxTime} | _] ->
-			Now = erlang:localtime_to_universaltime(erlang:localtime()),
-			Stamp = esaml:datetime_to_saml(Now),
-			if (Stamp > MaxTime) ->
+			DSecs = calendar:datetime_to_gregorian_seconds(saml_to_datetime(MaxTime)),
+			if (NowSecs > DSecs) ->
 				error(stale_assertion);
 			true ->
-				ok
+				DSecs
 			end;
-		_ -> ok
+		_ ->
+			NowSecs + 10*3600
 	end,
 	Digest = crypto:sha(xmerl_c14n:c14n(xmerl_dsig:strip(Assertion))),
 	{ResL, _BadNodes} = rpc:multicall(erlang, apply, [fun() ->
@@ -104,6 +114,7 @@ validate_assertion(Assertion, Audience) ->
 		true ->
 			error(duplicate_assertion);
 		_ ->
+			Until = DeathSecs - NowSecs + 1,
 			rpc:multicall(erlang, apply, [fun() ->
 				case ets:info(esaml_assertion_seen) of
 					undefined ->
@@ -115,7 +126,10 @@ validate_assertion(Assertion, Audience) ->
 						end);
 					_ ->
 						ets:insert(esaml_assertion_seen, {Digest, seen})
-				end
+				end,
+				{ok, _} = timer:apply_after(Until * 1000, erlang, apply, [fun() ->
+					ets:delete(esaml_assertion_seen, Digest)
+				end, []])
 			end, []]),
 			ok
 	end.
@@ -238,7 +252,8 @@ build_nsinfo_test() ->
 	E3Ns = build_nsinfo(FooNs, E3).
 
 datetime_test() ->
-	"2013-05-02T17:26:53Z" = datetime_to_saml({{2013,5,2},{17,26,53}}).
+	"2013-05-02T17:26:53Z" = datetime_to_saml({{2013,5,2},{17,26,53}}),
+	{{1990,11,23},{18,1,1}} = saml_to_datetime("1990-11-23T18:01:01Z").
 
 attributes_test() ->
 	{Doc, _} = xmerl_scan:string("<saml:Assertion xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"><saml:AttributeStatement><saml:Attribute Name=\"urn:oid:0.9.2342.19200300.100.1.3\"><saml:AttributeValue>test@test.com</saml:AttributeValue></saml:Attribute><saml:Attribute Name=\"foo\"><saml:AttributeValue>george</saml:AttributeValue><saml:AttributeValue>bar</saml:AttributeValue></saml:Attribute></saml:AttributeStatement></saml:Assertion>", [{namespace_conformant, true}]),
@@ -246,7 +261,8 @@ attributes_test() ->
 
 validate_assertion_test() ->
 	Now = erlang:localtime_to_universaltime(erlang:localtime()),
-	Stamp = esaml:datetime_to_saml(Now),
+	DeathSecs = calendar:datetime_to_gregorian_seconds(Now) + 1,
+	Death = esaml:datetime_to_saml(calendar:gregorian_seconds_to_datetime(DeathSecs)),
 
 	Ns = #xmlNamespace{nodes = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
 
@@ -254,14 +270,48 @@ validate_assertion_test() ->
 		attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}],
 		content = [
 			#xmlElement{name = 'saml:Conditions',
-				attributes = [#xmlAttribute{name = 'NotOnOrAfter', value = Stamp}],
+				attributes = [#xmlAttribute{name = 'NotOnOrAfter', value = Death}],
 				content = [#xmlElement{name = 'saml:AudienceRestriction',
 					content = [#xmlElement{name = 'saml:Audience',
 						content = [#xmlText{value = "foo"}]}] }] } ]
 	}),
 	ok = validate_assertion(E1, "foo"),
-	{'EXIT', {bad_audience, _}} = (catch validate_assertion(E1, "something")),
+	{'EXIT', {bad_audience, _}} = (catch validate_assertion(E1, "something")).
 
+validate_duplicate_assertion_test() ->
+	Now = erlang:localtime_to_universaltime(erlang:localtime()),
+	DeathSecs = calendar:datetime_to_gregorian_seconds(Now) + 1,
+	Death = esaml:datetime_to_saml(calendar:gregorian_seconds_to_datetime(DeathSecs)),
+
+	Ns = #xmlNamespace{nodes = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
+
+	E1 = build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
+		attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}],
+		content = [
+			#xmlElement{name = 'saml:Conditions',
+				attributes = [#xmlAttribute{name = 'NotOnOrAfter', value = Death}],
+				content = [#xmlElement{name = 'saml:AudienceRestriction',
+					content = [#xmlElement{name = 'saml:Audience',
+						content = [#xmlText{value = "testAudience"}]}] }] } ]
+	}),
+	Digest = crypto:sha(xmerl_c14n:c14n(xmerl_dsig:strip(E1))),
+
+	[] = ets:lookup(esaml_assertion_seen, Digest),
+	ok = validate_assertion(E1, "testAudience"),
+	[_] = ets:lookup(esaml_assertion_seen, Digest),
+	receive
+	after 500 ->
+		[_] = ets:lookup(esaml_assertion_seen, Digest),
+		{'EXIT', {duplicate_assertion, _}} = (catch validate_assertion(E1, "testAudience")),
+		receive
+		after 2000 ->
+			[] = ets:lookup(esaml_assertion_seen, Digest),
+			{'EXIT', {stale_assertion, _}} = (catch validate_assertion(E1, "testAudience"))
+		end
+	end.
+
+validate_stale_assertion_test() ->
+	Ns = #xmlNamespace{nodes = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
 	OldStamp = esaml:datetime_to_saml({{1990,1,1}, {1,1,1}}),
 	E2 = build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
 		attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}],
@@ -270,8 +320,7 @@ validate_assertion_test() ->
 				attributes = [#xmlAttribute{name = 'NotOnOrAfter', value = OldStamp}],
 				content = [] } ]
 	}),
-	{'EXIT', {stale_assertion, _}} = (catch validate_assertion(E2, "foo")),
+	{'EXIT', {stale_assertion, _}} = (catch validate_assertion(E2, "foo")).
 
-	{'EXIT', {duplicate_assertion, _}} = (catch validate_assertion(E1, "foo")).
 
 -endif.
