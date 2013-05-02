@@ -139,7 +139,7 @@ post([_ | [<<"consume">>]], Req, S = #state{}) ->
 	case decode_saml_response(PostVals) of
 		{error, Reason} ->
 			error_logger:warning_report("Failed to decode SAMLResponse value: ~p (req = ~p)", [Reason, Req2]),
-			cowboy_req:reply(403, <<"Failed to decode SAMLResponse value">>, Req2);
+			cowboy_req:reply(403, [], <<"Failed to decode SAMLResponse value">>, Req2);
 		Xml ->
 			case (catch begin
 				[Assertion] = xmerl_xpath:string("/samlp:Response/saml:Assertion", Xml, [{namespace, Ns}]),
@@ -165,7 +165,7 @@ post([_ | [<<"consume">>]], Req, S = #state{}) ->
 			end) of
 				{'EXIT', Reason} ->
 					error_logger:warning_report("Rejected SAML assertion for reason: ~p (req = ~p)", [Reason, Req2]),
-					cowboy_req:reply(403, <<"Invalid SAML assertion">>, Req2);
+					cowboy_req:reply(403, [], <<"Invalid SAML assertion">>, Req2);
 				Other -> Other
 			end
 	end.
