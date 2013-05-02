@@ -118,12 +118,17 @@ validate_assertion(Assertion, Audience) ->
 			rpc:multicall(erlang, apply, [fun() ->
 				case ets:info(esaml_assertion_seen) of
 					undefined ->
-						spawn(fun() ->
+						Me = self(),
+						Pid = spawn(fun() ->
 							register(esaml_ets_table_owner, self()),
 							ets:new(esaml_assertion_seen, [set, public, named_table]),
 							ets:insert(esaml_assertion_seen, {Digest, seen}),
+							Me ! {self(), ping},
 							ets_table_owner()
-						end);
+						end),
+						receive
+							{Pid, ping} -> ok
+						end;
 					_ ->
 						ets:insert(esaml_assertion_seen, {Digest, seen})
 				end,

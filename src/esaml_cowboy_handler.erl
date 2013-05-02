@@ -29,12 +29,17 @@ ets_table_owner() ->
 init(_Transport, Req, Options) ->
 	case {ets:info(esaml_privkey_cache), ets:info(esaml_certbin_cache)} of
 		{undefined, undefined} ->
-			spawn(fun() ->
+			Me = self(),
+			Pid = spawn(fun() ->
 				register(esaml_cowboy_ets_table_owner, self()),
 				ets:new(esaml_privkey_cache, [set, public, named_table]),
 				ets:new(esaml_certbin_cache, [set, public, named_table]),
+				Me ! {self(), ping},
 				ets_table_owner()
-			end);
+			end),
+			receive
+				{Pid, ping} -> ok
+			end;
 		_ -> ok
 	end,
 
