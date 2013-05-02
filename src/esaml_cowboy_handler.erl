@@ -79,7 +79,7 @@ init(_Transport, Req, Options) ->
 		end
 	end, FPSources),
 	{ok, Req, #state{
-		module = proplists:get_value(module, Options, esaml_sp),
+		module = proplists:get_value(module, Options, esaml_sp_default),
 		idp_target = proplists:get_value(idp_sso_target, Options, esaml:config(idp_sso_target)),
 		base_uri = proplists:get_value(base_uri, Options),
 		sign_req = proplists:get_value(sign_authn_requests, Options, (not (PrivKey =:= none)) and (not (Cert =:= none))),
@@ -133,6 +133,7 @@ post([_ | [<<"consume">>]], Req, S = #state{}) ->
 
 	case decode_saml_response(PostVals) of
 		{error, Reason} ->
+			error_logger:warning_report("Failed to decode SAMLResponse value: ~p (req = ~p)", [Reason, Req2]),
 			cowboy_req:reply(403, <<"Failed to decode SAMLResponse value">>, Req2);
 		Xml ->
 			case (catch begin
@@ -151,10 +152,11 @@ post([_ | [<<"consume">>]], Req, S = #state{}) ->
 				end,
 				ok = esaml:validate_assertion(Assertion, S#state.base_uri ++ "/metadata"),
 
-				Attrs = esaml:decode_attributes(Assertion),
-				Uid = proplists:get_value(uid, Attrs),
-				Output = io_lib:format("Hi there!\nYou appear to be ~p\nYour attributes: ~p\n\nThe assertion I got was:\n~p\n", [Uid, Attrs, xmerl_dsig:strip(Assertion)]),
-				cowboy_req:reply(200, [{<<"Content-Type">>, <<"text/plain">>}], Output, Req2)
+				{ok, Req3, ModState} = apply(S#state.module, init, [Req2]),
+				{ok, Req4, ModState2} = apply(S#state.module, handle_assertion, [Req3, Assertion, ModState]),
+				ok = apply(S#state.module, terminate, [Req4, ModState2]),
+
+				{ok, Req4}
 			end) of
 				{'EXIT', Reason} ->
 					error_logger:warning_report("Rejected SAML assertion for reason: ~p (req = ~p)", [Reason, Req2]),

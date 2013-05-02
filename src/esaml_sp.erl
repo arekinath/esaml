@@ -11,6 +11,6 @@
 -export([behaviour_info/1]).
 
 behaviour_info(callbacks) ->
-	[{init, 1}];
+	[{init, 1}, {handle_assertion, 3}, {terminate, 2}];
 behaviour_info(_) ->
 	undefined.
