@@ -50,6 +50,7 @@ common_attrib_map("urn:oid:1.3.6.1.4.1.5923.1.1.1.9") -> eduPersonScopedAffiliat
 common_attrib_map("urn:oid:2.16.840.1.113730.3.1.4") -> employeeType;
 common_attrib_map("urn:oid:0.9.2342.19200300.100.1.1") -> uid;
 common_attrib_map("urn:oid:2.5.4.4") -> surName;
+common_attrib_map(Uri = "http://" ++ _) -> list_to_atom(lists:last(string:tokens(Uri, "/")));
 common_attrib_map(Other) -> list_to_atom(Other).
 
 %% @doc Decodes the attributes of a SAML assertion as a property list.
@@ -271,8 +272,8 @@ datetime_test() ->
 	{{1990,11,23},{18,1,1}} = saml_to_datetime("1990-11-23T18:01:01Z").
 
 attributes_test() ->
-	{Doc, _} = xmerl_scan:string("<saml:Assertion xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"><saml:AttributeStatement><saml:Attribute Name=\"urn:oid:0.9.2342.19200300.100.1.3\"><saml:AttributeValue>test@test.com</saml:AttributeValue></saml:Attribute><saml:Attribute Name=\"foo\"><saml:AttributeValue>george</saml:AttributeValue><saml:AttributeValue>bar</saml:AttributeValue></saml:Attribute></saml:AttributeStatement></saml:Assertion>", [{namespace_conformant, true}]),
-	[{foo, ["george", "bar"]}, {mail, "test@test.com"}] = lists:sort(decode_attributes(Doc)).
+	{Doc, _} = xmerl_scan:string("<saml:Assertion xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"><saml:AttributeStatement><saml:Attribute Name=\"urn:oid:0.9.2342.19200300.100.1.3\"><saml:AttributeValue>test@test.com</saml:AttributeValue></saml:Attribute><saml:Attribute Name=\"foo\"><saml:AttributeValue>george</saml:AttributeValue><saml:AttributeValue>bar</saml:AttributeValue></saml:Attribute><saml:Attribute Name=\"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress\"><saml:AttributeValue>test@test.com</saml:AttributeValue></saml:Attribute></saml:AttributeStatement></saml:Assertion>", [{namespace_conformant, true}]),
+	[{emailaddress, "test@test.com"}, {foo, ["george", "bar"]}, {mail, "test@test.com"}] = lists:sort(decode_attributes(Doc)).
 
 validate_assertion_test() ->
 	Now = erlang:localtime_to_universaltime(erlang:localtime()),
