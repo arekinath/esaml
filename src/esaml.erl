@@ -13,7 +13,7 @@
 -include("esaml.hrl").
 
 -export([datetime_to_saml/1, saml_to_datetime/1]).
--export([config/2, config/1, to_xml/1, decode_response/1, validate_assertion/3]).
+-export([config/2, config/1, to_xml/1, decode_response/1, decode_assertion/1, validate_assertion/3]).
 -export([build_nsinfo/2]).
 
 %% @doc Converts a calendar:datetime() into SAML time string

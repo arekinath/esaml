@@ -6,6 +6,8 @@
 %% Distributed subject to the terms of the 2-clause BSD license, see
 %% the LICENSE file in the root of the distribution.
 
+%% data types / message records
+
 -record(esaml_org, {name :: string(), displayname :: string(), url :: string()}).
 
 -record(esaml_contact, {name :: string(), email :: string()}).
@@ -28,3 +30,7 @@
 
 -type esaml_status_code() :: success | request_error | response_error | bad_version | authn_failed | bad_attr | denied | bad_binding.
 -record(esaml_response, {version = "2.0" :: string(), issue_instant :: string(), destination :: string(), issuer :: string(), status :: esaml_status_code(), assertion :: #esaml_assertion{}}).
+
+%% state records
+
+-record(esaml_sp, {module, org = #esaml_org{}, tech = #esaml_contact{}, key, certificate, sign_requests = false, sign_assertions = true, sign_metadata = false, trusted_fingerprints = [], metadata_uri, consume_uri}).
