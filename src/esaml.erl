@@ -316,7 +316,7 @@ validate_assertion(AssertionXml, Recipient, Audience) ->
 					_ -> A
 				end end,
 				fun check_stale/1,
-				fun(A) -> case check_dupe(A, AssertionXml) of ok -> {ok, A}; _ -> {error, duplicate_assertion} end end
+				fun(A) -> case check_dupe(A, AssertionXml) of ok -> A; _ -> {error, duplicate_assertion} end end
 			], Assertion)
 	end.
 
@@ -516,7 +516,8 @@ validate_assertion_test() ->
 				#xmlElement{name = 'saml:AudienceRestriction', content = [
 					#xmlElement{name = 'saml:Audience', content = [#xmlText{value = "foo"}]}] }] } ]
 	}),
-	{ok, _} = validate_assertion(E1, "foobar", "foo"),
+	{ok, Assertion} = validate_assertion(E1, "foobar", "foo"),
+	#esaml_assertion{issue_instant = "now", recipient = "foobar", subject = #esaml_subject{notonorafter = Death}, conditions = [{audience, "foo"}]} = Assertion,
 	{error, bad_recipient} = validate_assertion(E1, "foo", "something"),
 	{error, bad_audience} = validate_assertion(E1, "foobar", "something"),
 
