@@ -139,7 +139,10 @@ post([_ | [<<"consume">>]], Req, S = #state{sp = SP}) ->
 					error_logger:warning_msg("Rejected SAML assertion for reason:\n  ~p\n  req = ~p\n", [Reason, Req2]),
 					cowboy_req:reply(403, [], <<"Invalid SAML assertion">>, Req2)
 			end
-	end.
+	end;
+
+post(_, Req, _) ->
+	cowboy_req:reply(404, [], <<>>, Req).
 
 get([_ | [<<"auth">>]], Req, S = #state{sp = SP}) ->
 	SignedXml = SP:authn_request(S#state.idp_target),
@@ -151,6 +154,7 @@ get([_ | [<<"auth">>]], Req, S = #state{sp = SP}) ->
 get([_  | [<<"metadata">>]], Req, S = #state{sp = SP}) ->
 	SignedXml = SP:metadata(),
 	Metadata = xmerl:export([SignedXml], xmerl_xml),
-	cowboy_req:reply(200, [{<<"Content-Type">>, <<"text/xml">>}], Metadata, Req).
+	cowboy_req:reply(200, [{<<"Content-Type">>, <<"text/xml">>}], Metadata, Req);
 
-
+get(_, Req, _) ->
+	cowboy_req:reply(404, [], <<>>, Req).
