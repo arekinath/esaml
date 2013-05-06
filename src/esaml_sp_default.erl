@@ -9,14 +9,16 @@
 -module(esaml_sp_default).
 -behaviour(esaml_sp).
 
+-include("esaml.hrl").
+
 -export([init/1, handle_assertion/3, terminate/2]).
 
 init(Req) -> {ok, Req, none}.
 
 handle_assertion(Req, Assertion, State) ->
-	Attrs = esaml:decode_attributes(Assertion),
+	Attrs = Assertion#esaml_assertion.attributes,
 	Uid = proplists:get_value(uid, Attrs),
-	Output = io_lib:format("Hi there!\nYou appear to be ~p\nYour attributes: ~p\n\nThe assertion I got was:\n~p\n", [Uid, Attrs, xmerl_dsig:strip(Assertion)]),
+	Output = io_lib:format("Hi there!\nYou appear to be ~p\nYour attributes: ~p\n\nThe assertion I got was:\n~p\n", [Uid, Attrs, Assertion]),
 	{ok, Req2} = cowboy_req:reply(200, [{<<"Content-Type">>, <<"text/plain">>}], Output, Req),
 	{ok, Req2, State}.
 

@@ -155,12 +155,12 @@ post([_ | [<<"consume">>]], Req, S = #state{}) ->
 				true ->
 					ok
 				end,
-				ok = esaml:validate_assertion(Assertion,
+				{ok, AssRecord} = esaml:validate_assertion(Assertion,
 											  S#state.base_uri ++ "/consume",
 											  S#state.base_uri ++ "/metadata"),
 
 				{ok, Req3, ModState} = apply(S#state.module, init, [Req2]),
-				{ok, Req4, ModState2} = apply(S#state.module, handle_assertion, [Req3, Assertion, ModState]),
+				{ok, Req4, ModState2} = apply(S#state.module, handle_assertion, [Req3, AssRecord, ModState]),
 				ok = apply(S#state.module, terminate, [Req4, ModState2]),
 
 				{ok, Req4}
@@ -191,16 +191,16 @@ get([_ | [<<"auth">>]], Req, S = #state{}) ->
 	cowboy_req:reply(302, [{<<"Location">>, S#state.idp_target ++ "?SAMLEncoding=urn:oasis:names:tc:SAML:2.0:bindings:URL-Encoding:DEFLATE&SAMLRequest=" ++ Param}], <<>>, Req);
 
 get([_  | [<<"metadata">>]], Req, S = #state{}) ->
-	Xml = esaml:to_xml(#esaml_metadata{org_name = S#state.org_name,
-							 		   org_displayname = S#state.org_displayname,
-							 		   org_url = S#state.org_url,
-							 		   tech_name = proplists:get_value(name, S#state.tech_contact),
-							 		   tech_email = proplists:get_value(email, S#state.tech_contact),
-							 		   sign_req = S#state.sign_req,
-							 		   sign_ass = S#state.sign_ass,
-							 		   cert = S#state.spcert,
-							 		   consumer_location = S#state.base_uri ++ "/consume",
-							 		   entity_id = S#state.base_uri ++ "/metadata"}),
+	Xml = esaml:to_xml(#esaml_sp_metadata{
+		org = #esaml_org{name = S#state.org_name, displayname = S#state.org_displayname,
+			url = S#state.org_url},
+		tech = #esaml_contact{name = proplists:get_value(name, S#state.tech_contact),
+			email = proplists:get_value(email, S#state.tech_contact)},
+		signed_requests = S#state.sign_req,
+		signed_assertions = S#state.sign_ass,
+		certificate = S#state.spcert,
+		consumer_location = S#state.base_uri ++ "/consume",
+		entity_id = S#state.base_uri ++ "/metadata"}),
 	SignedXml = xmerl_dsig:sign(Xml, S#state.spkey, S#state.spcert),
 	Metadata = xmerl:export([SignedXml], xmerl_xml),
 	cowboy_req:reply(200, [{<<"Content-Type">>, <<"text/xml">>}], Metadata, Req).
