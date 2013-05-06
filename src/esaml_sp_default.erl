@@ -18,8 +18,8 @@ init(Req) -> {ok, Req, none}.
 handle_assertion(Req, Assertion, State) ->
 	Attrs = Assertion#esaml_assertion.attributes,
 	Uid = proplists:get_value(uid, Attrs),
-	Output = io_lib:format("Hi there!\nYou appear to be ~p\nYour attributes: ~p\n\nThe assertion I got was:\n~p\n", [Uid, Attrs, Assertion]),
-	{ok, Req2} = cowboy_req:reply(200, [{<<"Content-Type">>, <<"text/plain">>}], Output, Req),
+	Output = io_lib:format("<html><head><title>SAML SP demo</title></head><body><h1>Hi there!</h1><p>This is the <code>esaml_sp_default</code> demo SP callback module from eSAML.</p><table><tr><td>Your name:</td><td>\n~p\n</td></tr><tr><td>Your UID:</td><td>\n~p\n</td></tr></table><hr /><p>The assertion I got was:</p><pre>\n~p\n</pre></body></html>", [Assertion#esaml_assertion.subject#esaml_subject.name, Uid, Assertion]),
+	{ok, Req2} = cowboy_req:reply(200, [{<<"Content-Type">>, <<"text/html">>}], Output, Req),
 	{ok, Req2, State}.
 
 terminate(_Req, _State) ->
