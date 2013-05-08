@@ -7,14 +7,27 @@
 %% the LICENSE file in the root of the distribution.
 
 -module(esaml).
+-behaviour(application).
 
 -include_lib("xmerl/include/xmerl.hrl").
 -include_lib("public_key/include/public_key.hrl").
 -include("esaml.hrl").
 
+-export([start/2, stop/1]).
 -export([datetime_to_saml/1, saml_to_datetime/1]).
 -export([config/2, config/1, to_xml/1, decode_response/1, decode_assertion/1, validate_assertion/3]).
 -export([build_nsinfo/2]).
+
+start(_StartType, _StartArgs) ->
+	Pid = spawn(fun() ->
+		register(esaml_ets_table_owner, self()),
+		ets:new(esaml_assertion_seen, [set, public, named_table]),
+		ets_table_owner()
+	end),
+	{ok, Pid}.
+
+stop(_State) ->
+	ok.
 
 %% @doc Converts a calendar:datetime() into SAML time string
 -spec datetime_to_saml(Time :: calendar:datetime()) -> string().
