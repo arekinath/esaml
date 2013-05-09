@@ -14,7 +14,7 @@
 -export([setup/1, authn_request/2, metadata/1, consume/3]).
 
 behaviour_info(callbacks) ->
-	[{init, 1}, {handle_assertion, 3}, {terminate, 2}];
+	[{init, 2}, {handle_assertion, 3}, {terminate, 2}];
 behaviour_info(_) ->
 	undefined.
 
@@ -89,7 +89,7 @@ consume(Xml, Req, SP = #esaml_sp{}) ->
 			end
 		end,
 		fun(AR) ->
-			{ok, Req2, ModState} = apply(SP#esaml_sp.module, init, [Req]),
+			{ok, Req2, ModState} = apply(SP#esaml_sp.module, init, [Req, SP#esaml_sp.modargs]),
 			{ok, Req3, ModState2} = apply(SP#esaml_sp.module, handle_assertion, [Req2, AR, ModState]),
 			ok = apply(SP#esaml_sp.module, terminate, [Req3, ModState2]),
 			{Req3, ModState2}

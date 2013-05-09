@@ -11,9 +11,9 @@
 
 -include("esaml.hrl").
 
--export([init/1, handle_assertion/3, terminate/2]).
+-export([init/2, handle_assertion/3, terminate/2]).
 
-init(Req) -> {ok, Req, none}.
+init(Req, _Args) -> {ok, Req, none}.
 
 handle_assertion(Req, Assertion, State) ->
 	Attrs = Assertion#esaml_assertion.attributes,

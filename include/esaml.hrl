@@ -33,4 +33,4 @@
 
 %% state records
 
--record(esaml_sp, {module, org = #esaml_org{}, tech = #esaml_contact{}, key, certificate, sign_requests = false, sign_assertions = true, sign_metadata = false, trusted_fingerprints = [], metadata_uri, consume_uri}).
+-record(esaml_sp, {module, modargs = [], org = #esaml_org{}, tech = #esaml_contact{}, key, certificate, sign_requests = false, sign_assertions = true, sign_metadata = false, trusted_fingerprints = [], metadata_uri, consume_uri}).

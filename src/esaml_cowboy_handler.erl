@@ -75,6 +75,7 @@ init(_Transport, Req, Options) ->
 		base_uri = BaseUri,
 		sp = esaml_sp:setup(#esaml_sp{
 			module = proplists:get_value(module, Options, esaml_sp_default),
+			modargs = proplists:get_value(modargs, Options, []),
 			key = PrivKey,
 			certificate = Cert,
 			trusted_fingerprints = proplists:get_value(trusted_fingerprints, Options, []),
