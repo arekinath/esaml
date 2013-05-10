@@ -39,7 +39,7 @@ init(_Transport, Req, Options) ->
 			end;
 		_ -> ok
 	end,
-	PrivKey = case proplists:get_value(sp_private_key, Options) of
+	PrivKey = case proplists:get_value(sp_private_key, Options, esaml:config(sp_private_key)) of
 		undefined -> none;
 		PrivKeyPath ->
 			case ets:lookup(esaml_privkey_cache, PrivKeyPath) of
@@ -56,7 +56,7 @@ init(_Transport, Req, Options) ->
 					Key
 			end
 	end,
-	Cert = case proplists:get_value(sp_certificate, Options) of
+	Cert = case proplists:get_value(sp_certificate, Options, esaml:config(sp_certificate)) of
 		undefined -> none;
 		CertPath ->
 			case ets:lookup(esaml_certbin_cache, CertPath) of

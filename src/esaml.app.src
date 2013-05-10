@@ -17,9 +17,7 @@
     {org_name, "SAML Service Provider"},
     {org_displayname, "SAML Service Provider @ Some Location"},
     {org_url, "http://sp.example.com"},
-
     {tech_contact, [{name, "SAML SP Support"}, {email, "saml-support@sp.example.com"}]},
-
     {trusted_fingerprints, []}
     ]}
  ]}.
