@@ -145,12 +145,46 @@ post([_ | [<<"consume">>]], Req, S = #state{sp = SP}) ->
 post(_, Req, _) ->
 	cowboy_req:reply(404, [], <<>>, Req).
 
+generate_post_html(Dest, Enc, Req) ->
+	<<"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">
+<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">
+<head>
+<meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" />
+<title>POST data</title>
+</head>
+<body onload=\"document.forms[0].submit()\">
+<noscript>
+<p><strong>Note:</strong> Since your browser does not support JavaScript, you must press the button below once to proceed.</p>
+</noscript>
+<form method=\"post\" action=\"",Dest/binary,"\">
+<input type=\"hidden\" name=\"SAMLEncoding\" value=\"",Enc/binary,"\" />
+<input type=\"hidden\" name=\"SAMLRequest\" value=\"",Req/binary,"\" />
+<noscript><input type=\"submit\" value=\"Submit\" /></noscript>
+</form>
+</body>
+</html>">>.
+
 get([_ | [<<"auth">>]], Req, S = #state{sp = SP}) ->
 	SignedXml = SP:authn_request(S#state.idp_target),
 	AuthnReq = lists:flatten(xmerl:export([SignedXml], xmerl_xml)),
 	Param = edoc_lib:escape_uri(base64:encode_to_string(zlib:zip(AuthnReq))),
-
-	cowboy_req:reply(302, [{<<"Location">>, S#state.idp_target ++ "?SAMLEncoding=urn:oasis:names:tc:SAML:2.0:bindings:URL-Encoding:DEFLATE&SAMLRequest=" ++ Param}], <<>>, Req);
+	Target = list_to_binary(S#state.idp_target ++ "?SAMLEncoding=urn:oasis:names:tc:SAML:2.0:bindings:URL-Encoding:DEFLATE&SAMLRequest=" ++ Param),
+	{UA, _} = cowboy_req:header(<<"user-agent">>, Req, <<"">>),
+	IsIE = not (binary:match(UA, <<"MSIE">>) =:= nomatch),
+	if IsIE andalso (byte_size(Target) > 2042) ->
+		BaseData = base64:encode_to_string(AuthnReq),
+		Html = generate_post_html(list_to_binary(S#state.idp_target), <<"urn:oasis:names:tc:SAML:2.0:bindings:URL-Encoding:DEFLATE">>, list_to_binary(BaseData)),
+		cowboy_req:reply(200, [
+			{<<"Cache-Control">>, <<"no-cache">>},
+			{<<"Pragma">>, <<"no-cache">>}
+		], Html, Req);
+	true ->
+		cowboy_req:reply(302, [
+			{<<"Cache-Control">>, <<"no-cache">>},
+			{<<"Pragma">>, <<"no-cache">>},
+			{<<"Location">>, Target}
+		], <<"Redirecting...">>, Req)
+	end;
 
 get([_  | [<<"metadata">>]], Req, S = #state{sp = SP}) ->
 	SignedXml = SP:metadata(),
