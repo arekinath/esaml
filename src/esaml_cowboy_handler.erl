@@ -145,7 +145,7 @@ post([_ | [<<"consume">>]], Req, S = #state{sp = SP}) ->
 post(_, Req, _) ->
 	cowboy_req:reply(404, [], <<>>, Req).
 
-generate_post_html(Dest, Enc, Req) ->
+generate_post_html(Dest, Req) ->
 	<<"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">
 <html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">
 <head>
@@ -157,7 +157,6 @@ generate_post_html(Dest, Enc, Req) ->
 <p><strong>Note:</strong> Since your browser does not support JavaScript, you must press the button below once to proceed.</p>
 </noscript>
 <form method=\"post\" action=\"",Dest/binary,"\">
-<input type=\"hidden\" name=\"SAMLEncoding\" value=\"",Enc/binary,"\" />
 <input type=\"hidden\" name=\"SAMLRequest\" value=\"",Req/binary,"\" />
 <noscript><input type=\"submit\" value=\"Submit\" /></noscript>
 </form>
@@ -173,7 +172,7 @@ get([_ | [<<"auth">>]], Req, S = #state{sp = SP}) ->
 	IsIE = not (binary:match(UA, <<"MSIE">>) =:= nomatch),
 	if IsIE andalso (byte_size(Target) > 2042) ->
 		BaseData = base64:encode_to_string(AuthnReq),
-		Html = generate_post_html(list_to_binary(S#state.idp_target), <<"urn:oasis:names:tc:SAML:2.0:bindings:URL-Encoding:DEFLATE">>, list_to_binary(BaseData)),
+		Html = generate_post_html(list_to_binary(S#state.idp_target), list_to_binary(BaseData)),
 		cowboy_req:reply(200, [
 			{<<"Cache-Control">>, <<"no-cache">>},
 			{<<"Pragma">>, <<"no-cache">>}
