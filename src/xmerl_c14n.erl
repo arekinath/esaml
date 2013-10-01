@@ -24,11 +24,15 @@ canon_name(Ns, Name, Nsp) ->
          case proplists:get_value(Ns, Nsp#xmlNamespace.nodes) of
             undefined ->
                error({ns_not_found, Ns, Nsp});
-            Uri -> atom_to_list(Uri)
+            Uri -> Uri
          end
    end,
-   NamePart = if is_atom(Name) -> atom_to_list(Name); true -> Name end,
-   lists:flatten([NsPart | NamePart]).
+   IfAtom2List =
+        fun
+            (N) when is_atom(N) -> atom_to_list(N);
+            (N)                 -> N
+        end,
+   lists:flatten([IfAtom2List(NsPart) | IfAtom2List(Name)]).
 
 %% @doc Returns the canonical URI name of an XML element or attribute.
 %% @internal
