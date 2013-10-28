@@ -15,7 +15,7 @@
 
 -export([init/3, handle/2, get/3, post/3, terminate/3]).
 
--record(state, {idp_target, base_uri, sp}).
+-record(state, {idp_target, base_uri, sp, max_saml_response_size}).
 
 ets_table_owner() ->
 	receive
@@ -73,6 +73,7 @@ init(_Transport, Req, Options) ->
 	{ok, Req, #state{
 		idp_target = proplists:get_value(idp_sso_target, Options, esaml:config(idp_sso_target)),
 		base_uri = BaseUri,
+        max_saml_response_size = proplists:get_value(max_saml_response_size, Options, infinity),
 		sp = esaml_sp:setup(#esaml_sp{
 			module = proplists:get_value(module, Options, esaml_sp_default),
 			modargs = proplists:get_value(modargs, Options, []),
@@ -125,8 +126,9 @@ decode_saml_response(PostVals) ->
 			Other
 	end.
 
-post([_ | [<<"consume">>]], Req, S = #state{sp = SP}) ->
-	{ok, PostVals, Req2} = cowboy_req:body_qs(Req),
+post([_ | [<<"consume">>]], Req, S = #state{max_saml_response_size = MaxSamlResponseSize,
+                                            sp = SP}) ->
+	{ok, PostVals, Req2} = cowboy_req:body_qs(MaxSamlResponseSize, Req),
 
 	case decode_saml_response(PostVals) of
 		{error, Reason} ->
