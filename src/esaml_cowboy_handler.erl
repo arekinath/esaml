@@ -15,7 +15,7 @@
 
 -export([init/3, handle/2, get/3, post/3, terminate/3]).
 
--record(state, {idp_target, base_uri, sp, max_saml_response_size}).
+-record(state, {idp_target, sp, max_saml_response_size}).
 
 ets_table_owner() ->
 	receive
@@ -50,7 +50,7 @@ init(_Transport, Req, Options) ->
 					Key = case public_key:pem_entry_decode(KeyEntry) of
 						#'PrivateKeyInfo'{privateKey = KeyData} ->
 							public_key:der_decode('RSAPrivateKey', list_to_binary(KeyData));
-		      			Other -> Other
+						Other -> Other
 					end,
 					ets:insert(esaml_privkey_cache, {PrivKeyPath, Key}),
 					Key
@@ -63,25 +63,34 @@ init(_Transport, Req, Options) ->
 				[{_, CertBin}] -> CertBin;
 				_ ->
 					{ok, CertFile} = file:read_file(CertPath),
-   					[{'Certificate', CertBin, not_encrypted}] = public_key:pem_decode(CertFile),
-   					ets:insert(esaml_certbin_cache, {CertPath, CertBin}),
-   					CertBin
-   			end
+					[{'Certificate', CertBin, not_encrypted}] = public_key:pem_decode(CertFile),
+					ets:insert(esaml_certbin_cache, {CertPath, CertBin}),
+					CertBin
+			end
 	end,
 	Tech = proplists:get_value(tech_contact, Options, esaml:config(tech_contact, [{name, "undefined"}, {email, "undefined"}])),
-	BaseUri = proplists:get_value(base_uri, Options),
+
+	GetUriFromOptions =
+		fun(OptionName, DefaultPostfix) ->
+				case proplists:get_value(OptionName, Options) of
+					undefined ->
+						proplists:get_value(base_uri, Options) ++ "/" ++ DefaultPostfix;
+					Value ->
+						Value
+				end
+		end,
+
 	{ok, Req, #state{
 		idp_target = proplists:get_value(idp_sso_target, Options, esaml:config(idp_sso_target)),
-		base_uri = BaseUri,
-        max_saml_response_size = proplists:get_value(max_saml_response_size, Options, infinity),
+		max_saml_response_size = proplists:get_value(max_saml_response_size, Options, infinity),
 		sp = esaml_sp:setup(#esaml_sp{
 			module = proplists:get_value(module, Options, esaml_sp_default),
 			modargs = proplists:get_value(modargs, Options, []),
 			key = PrivKey,
 			certificate = Cert,
 			trusted_fingerprints = proplists:get_value(trusted_fingerprints, Options, []),
-			consume_uri = BaseUri ++ "/consume",
-			metadata_uri = BaseUri ++ "/metadata",
+			consume_uri = GetUriFromOptions(consume_uri, "consume"),
+			metadata_uri = GetUriFromOptions(metadata_uri, "metadata"),
 			org = #esaml_org{
 				name = proplists:get_value(org_name, Options, esaml:config(org_name, "undefined")),
 				displayname = proplists:get_value(org_displayname, Options, esaml:config(org_displayname, "undefined")),
@@ -127,7 +136,7 @@ decode_saml_response(PostVals) ->
 	end.
 
 post([_ | [<<"consume">>]], Req, S = #state{max_saml_response_size = MaxSamlResponseSize,
-                                            sp = SP}) ->
+											sp = SP}) ->
 	{ok, PostVals, Req2} = cowboy_req:body_qs(MaxSamlResponseSize, Req),
 
 	case decode_saml_response(PostVals) of
