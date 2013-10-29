@@ -135,7 +135,7 @@ decode_saml_response(PostVals) ->
 			Other
 	end.
 
-post([_ | [<<"consume">>]], Req, S = #state{max_saml_response_size = MaxSamlResponseSize,
+post([_ | [<<"consume">>]], Req, #state{max_saml_response_size = MaxSamlResponseSize,
 											sp = SP}) ->
 	{ok, PostVals, Req2} = cowboy_req:body_qs(MaxSamlResponseSize, Req),
 
@@ -196,7 +196,7 @@ get([_ | [<<"auth">>]], Req, S = #state{sp = SP}) ->
 		], <<"Redirecting...">>, Req)
 	end;
 
-get([_  | [<<"metadata">>]], Req, S = #state{sp = SP}) ->
+get([_  | [<<"metadata">>]], Req, #state{sp = SP}) ->
 	SignedXml = SP:metadata(),
 	Metadata = xmerl:export([SignedXml], xmerl_xml),
 	cowboy_req:reply(200, [{<<"Content-Type">>, <<"text/xml">>}], Metadata, Req);
