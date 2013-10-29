@@ -269,7 +269,8 @@ check_dupe(A, Xml) ->
 	Now = erlang:localtime_to_universaltime(erlang:localtime()),
 	NowSecs = calendar:datetime_to_gregorian_seconds(Now),
 	DeathSecs = stale_time(A),
-	Digest = crypto:sha(xmerl_c14n:c14n(xmerl_dsig:strip(Xml))),
+	Digest = crypto:sha(
+		unicode:characters_to_binary(xmerl_c14n:c14n(xmerl_dsig:strip(Xml)))),
 	{ResL, _BadNodes} = rpc:multicall(erlang, apply, [fun() ->
 		case (catch ets:lookup(esaml_assertion_seen, Digest)) of
 			[{Digest, seen} | _] -> seen;
@@ -568,7 +569,8 @@ validate_duplicate_assertion_test() ->
 				#xmlElement{name = 'saml:AudienceRestriction', content = [
 					#xmlElement{name = 'saml:Audience', content = [#xmlText{value = "testAudience"}]}] }] } ]
 	}),
-	Digest = crypto:sha(xmerl_c14n:c14n(xmerl_dsig:strip(E1))),
+	Digest = crypto:sha(
+		unicode:characters_to_binary(xmerl_c14n:c14n(xmerl_dsig:strip(E1)))),
 
 	[] = ets:lookup(esaml_assertion_seen, Digest),
 	{ok, _} = validate_assertion(E1, "foobar", "testAudience"),
