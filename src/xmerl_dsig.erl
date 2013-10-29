@@ -1,3 +1,5 @@
+%% -*- coding: utf-8 -*-
+%%
 %% esaml - SAML for erlang
 %%
 %% Copyright (c) 2013, Alex Wilson and the University of Queensland
@@ -242,5 +244,19 @@ sign_generate_id_test() ->
    Ns = [{"ds", 'http://www.w3.org/2000/09/xmldsig#'}],
    [#xmlAttribute{name = 'ID', value = RootId}] = xmerl_xpath:string("@ID", SignedXml, [{namespace, Ns}]),
    [#xmlAttribute{value = "#" ++ RootId}] = xmerl_xpath:string("ds:Signature/ds:SignedInfo/ds:Reference/@URI", SignedXml, [{namespace, Ns}]).
+
+utf8_test() ->
+   XmlData = <<"<x:foo xmlns:x=\"urn:foo:x#\"><x:name attr=\"Игорь Карымов\">その人</x:name></x:foo>">>,
+   {Doc, _} = xmerl_scan:string(binary_to_list(XmlData), [{namespace_conformant, true}]),
+   {Key, CertBin} = test_sign_key(),
+   SignedXml = sign(Doc, Key, CertBin),
+   Ns = [{"ds", 'http://www.w3.org/2000/09/xmldsig#'}, {"x", 'urn:foo:x#'}],
+   [#xmlAttribute{name = 'ID', value = RootId}] = xmerl_xpath:string("@ID", SignedXml, [{namespace, Ns}]),
+   [#xmlAttribute{value = "#" ++ RootId}] = xmerl_xpath:string("ds:Signature/ds:SignedInfo/ds:Reference/@URI", SignedXml, [{namespace, Ns}]),
+   AttrValue = unicode:characters_to_list(<<"Игорь Карымов">>),
+   [#xmlAttribute{name = 'attr', value = AttrValue}] = xmerl_xpath:string("x:name/@attr", SignedXml, [{namespace, Ns}]),
+   TextValue = unicode:characters_to_list(<<"その人">>),
+   [#xmlText{value = TextValue}] = xmerl_xpath:string("x:name/text()", SignedXml, [{namespace, Ns}]),
+   ok = verify(SignedXml, [crypto:sha(CertBin)]).
 
 -endif.
