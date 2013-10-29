@@ -58,7 +58,8 @@ sign(ElementIn, PrivateKey, CertBin) ->
 
    % first we need the digest, to generate our SignedInfo element
    CanonXml = xmerl_c14n:c14n(Element),
-   DigestValue = base64:encode_to_string(crypto:sha(CanonXml)),
+   DigestValue = base64:encode_to_string(
+      crypto:sha(unicode:characters_to_binary(CanonXml, unicode, utf8))),
 
    Ns = #xmlNamespace{nodes = [{"ds", 'http://www.w3.org/2000/09/xmldsig#'}]},
    SigInfo = esaml:build_nsinfo(Ns, #xmlElement{
@@ -86,7 +87,7 @@ sign(ElementIn, PrivateKey, CertBin) ->
 
    % now we sign the SignedInfo element...
    SigInfoCanon = xmerl_c14n:c14n(SigInfo),
-   Data = list_to_binary(SigInfoCanon),
+   Data = unicode:characters_to_binary(SigInfoCanon, unicode, utf8),
 
    Signature = public_key:sign(Data, sha, PrivateKey),
    Sig64 = base64:encode_to_string(Signature),
@@ -121,7 +122,8 @@ verify(Element, Fingerprints) ->
 
    DsNs = [{"ds", 'http://www.w3.org/2000/09/xmldsig#'}],
    [#xmlText{value = Sha64}] = xmerl_xpath:string("ds:Signature/ds:SignedInfo/ds:Reference/ds:DigestValue/text()", Element, [{namespace, DsNs}]),
-   CanonSha = crypto:sha(CanonXml),
+   CanonXmlUtf8 = unicode:characters_to_binary(CanonXml, unicode, utf8),
+   CanonSha = crypto:sha(CanonXmlUtf8),
    CanonSha2 = base64:decode(Sha64),
    if not (CanonSha =:= CanonSha2) ->
       {error, bad_digest};

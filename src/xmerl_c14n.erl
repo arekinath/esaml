@@ -115,7 +115,7 @@ xml_safe_string(Str, Quotes) when is_list(Str) ->
    [Next | Rest] = Str,
    if
       (not Quotes andalso ([Next] =:= "\n")) -> [Next | xml_safe_string(Rest, Quotes)];
-      (Next < 32) orelse (Next > 126) ->
+      (Next < 32) ->
          lists:flatten(["&#x" ++ integer_to_list(Next, 16) ++ ";" | xml_safe_string(Rest, Quotes)]);
       (Quotes andalso ([Next] =:= "\"")) -> lists:flatten(["&quot;" | xml_safe_string(Rest, Quotes)]);
       ([Next] =:= "&") -> lists:flatten(["&amp;" | xml_safe_string(Rest, Quotes)]);
@@ -276,7 +276,12 @@ xml_safe_string_test() ->
    "foo \ngeorge" = xml_safe_string(<<"foo \ngeorge">>),
    "foo &lt;&#x5;&gt; = &amp; help" = xml_safe_string(lists:flatten(["foo <", 5, "> = & help"])),
    "&#xE;" = xml_safe_string(<<14>>),
-   "\"foo\"" = xml_safe_string("\"foo\"").
+   "\"foo\"" = xml_safe_string("\"foo\""),
+   "test&#xD;\n" = xml_safe_string("test\r\n").
+
+xml_safe_string_utf8_test() ->
+   String = unicode:characters_to_list(<<"バカの名前">>),
+   String = xml_safe_string(String).
 
 c14n_3_1_test() ->
    {Doc, _} = xmerl_scan:string("<?xml version=\"1.0\"?>\n\n<?xml-stylesheet   href=\"doc.xsl\"\n   type=\"text/xsl\"   ?>\n\n<doc>Hello, world!<!-- Comment 1 --></doc>\n\n<?pi-without-data     ?>\n\n<!-- Comment 2 -->\n\n<!-- Comment 3 -->", [{namespace_conformant, true}, {document, true}]),
