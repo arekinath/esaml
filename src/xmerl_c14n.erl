@@ -17,7 +17,7 @@
 %% @internal
 -spec canon_name(Prefix :: string(), Name :: string() | atom(), Nsp :: #xmlNamespace{}) -> string().
 canon_name(Ns, Name, Nsp) ->
-   NsPart = case Ns of
+   NsPartRaw = case Ns of
       empty -> Nsp#xmlNamespace.default;
       [] -> Nsp#xmlNamespace.default;
       _ ->
@@ -27,6 +27,7 @@ canon_name(Ns, Name, Nsp) ->
             Uri -> atom_to_list(Uri)
          end
    end,
+   NsPart = if is_atom(NsPartRaw) -> atom_to_list(NsPartRaw); true -> NsPartRaw end,
    NamePart = if is_atom(Name) -> atom_to_list(Name); true -> Name end,
    lists:flatten([NsPart | NamePart]).
 
@@ -258,6 +259,12 @@ canon_name_attr_test() ->
    "urn:foo:Blah" = canon_name(#xmlAttribute{name = 'Blah', nsinfo = {"foo", "Blah"}, namespace = #xmlNamespace{nodes = [{"foo", 'urn:foo:'}]}}).
 canon_name_elem_test() ->
    "urn:foo:Blah" = canon_name(#xmlElement{name = 'Blah', nsinfo = {"foo", "Blah"}, namespace = #xmlNamespace{nodes = [{"foo", 'urn:foo:'}]}}).
+
+canon_name_default_ns_test() ->
+   {Doc, []} = xmerl_scan:string("<foo:a xmlns:foo=\"urn:foo:\"><b xmlns=\"urn:bar:\"></b></foo:a>", [{namespace_conformant, true}]),
+   A = #xmlElement{content = [B]} = Doc,
+   "urn:foo:a" = canon_name(A),
+   "urn:bar:b" = canon_name(B).
 
 needed_ns_test() ->
    Ns = #xmlNamespace{nodes = [{"foo", 'urn:foo:'}, {"bar", 'urn:bar:'}]},
