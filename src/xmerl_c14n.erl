@@ -203,7 +203,10 @@ c14n(Elem = #xmlElement{}, KnownNSIn, ActiveNSIn, Comments, Acc) ->
    {Acc2, FinalActiveNS} = if
       not (Default =:= []) andalso not (Default =:= ParentDefault) ->
          {["\"", xml_safe_string(Default, true), " xmlns=\"" | Acc1], [{default, Default} | NewActiveNS]};
-      true -> {Acc1, NewActiveNS}
+      not (Default =:= []) ->
+         {Acc1, [{default, Default} | NewActiveNS]};
+      true ->
+         {Acc1, NewActiveNS}
    end,
    Acc3 = lists:foldl(fun(Ns, AccIn) ->
       ["\"",xml_safe_string(proplists:get_value(Ns, KnownNS, ""), true),"=\"",Ns,":"," xmlns" | AccIn]
@@ -308,5 +311,16 @@ c14n_3_4_test() ->
 
    Target = "<doc>\n   <text>First line\n\nSecond line</text>\n   <value>2</value>\n   <compute>value&gt;\"0\" &amp;&amp; value&lt;\"10\" ?\"valid\":\"error\"</compute>\n   <compute expr=\"value>&quot;0&quot; &amp;&amp; value&lt;&quot;10&quot; ?&quot;valid&quot;:&quot;error&quot;\">valid</compute>\n   <norm attr=\" '    &#xD;&#xA;&#x9;   ' \"></norm>\n   <normNames attr=\"A  &#xD;&#xA;&#x9; B\"></normNames>\n   <normId id=\"'  &#xD;&#xA;&#x9; '\"></normId>\n</doc>",
    Target = c14n(Doc, true).
+
+default_ns_test() ->
+   {Doc, _} = xmerl_scan:string("<foo:a xmlns:foo=\"urn:foo:\"><b xmlns=\"urn:bar:\"><c xmlns=\"urn:bar:\" /></b><c xmlns=\"urn:bar:\"><d /></c><foo:e><f xmlns=\"urn:foo:\"><foo:x>blah</foo:x></f></foo:e></foo:a>", [{namespace_conformant, true}]),
+
+   Target = "<foo:a xmlns:foo=\"urn:foo:\"><b xmlns=\"urn:bar:\"><c></c></b><c xmlns=\"urn:bar:\"><d></d></c><foo:e><f xmlns=\"urn:foo:\"><foo:x>blah</foo:x></f></foo:e></foo:a>",
+   Target = c14n(Doc, true),
+
+   {Doc2, _} = xmerl_scan:string("<?xml version=\"1.0\" encoding=\"UTF-8\"?><saml2p:Response xmlns:saml2p=\"urn:oasis:names:tc:SAML:2.0:protocol\" ID=\"_83dbf3f1-53c2-4f49-b294-7c19cbf2b77b\" Version=\"2.0\" IssueInstant=\"2013-10-30T11:15:47.517Z\" Destination=\"https://10.10.18.25/saml/consume\"><Assertion xmlns=\"urn:oasis:names:tc:SAML:2.0:assertion\" Version=\"2.0\" ID=\"_debe5f4e-4343-4f95-b997-89db5a483202\" IssueInstant=\"2013-10-30T11:15:47.517Z\"><Issuer>foo</Issuer><Subject><NameID Format=\"urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified\"/><SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\"><SubjectConfirmationData NotOnOrAfter=\"2013-10-30T12:15:47.517Z\" Recipient=\"https://10.10.18.25/saml/consume\"/></SubjectConfirmation></Subject></Assertion></saml2p:Response>", [{namespace_conformant, true}]),
+
+   Target2 = "<saml2p:Response xmlns:saml2p=\"urn:oasis:names:tc:SAML:2.0:protocol\" Destination=\"https://10.10.18.25/saml/consume\" ID=\"_83dbf3f1-53c2-4f49-b294-7c19cbf2b77b\" IssueInstant=\"2013-10-30T11:15:47.517Z\" Version=\"2.0\"><Assertion xmlns=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_debe5f4e-4343-4f95-b997-89db5a483202\" IssueInstant=\"2013-10-30T11:15:47.517Z\" Version=\"2.0\"><Issuer>foo</Issuer><Subject><NameID Format=\"urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified\"></NameID><SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\"><SubjectConfirmationData NotOnOrAfter=\"2013-10-30T12:15:47.517Z\" Recipient=\"https://10.10.18.25/saml/consume\"></SubjectConfirmationData></SubjectConfirmation></Subject></Assertion></saml2p:Response>",
+   Target2 = c14n(Doc2, true).
 
 -endif.
