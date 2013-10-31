@@ -8,7 +8,7 @@
 
 -module(xmerl_c14n).
 
--export([c14n/2, c14n/1, xml_safe_string/2, xml_safe_string/1, canon_name/1]).
+-export([c14n/3, c14n/2, c14n/1, xml_safe_string/2, xml_safe_string/1, canon_name/1]).
 
 -include_lib("xmerl/include/xmerl.hrl").
 -include_lib("public_key/include/public_key.hrl").
@@ -77,8 +77,8 @@ clean_sort_attrs(Attrs) ->
 
 %% @doc Returns the list of namespace prefixes "needed" by an element in canonical form
 %% @internal
--spec needed_ns(Elem :: #xmlElement{}) -> [string()].
-needed_ns(#xmlElement{nsinfo = NsInfo, attributes = Attrs}) ->
+-spec needed_ns(Elem :: #xmlElement{}, InclNs :: [string()]) -> [string()].
+needed_ns(#xmlElement{nsinfo = NsInfo, attributes = Attrs}, InclNs) ->
    NeededNs1 = case NsInfo of
       {Nas, _} -> [Nas];
       _ -> []
@@ -91,7 +91,11 @@ needed_ns(#xmlElement{nsinfo = NsInfo, attributes = Attrs}) ->
    %end,
    lists:foldl(fun(Attr, Needed) ->
       case Attr#xmlAttribute.nsinfo of
-         {"xmlns", _} -> Needed;
+         {"xmlns", Prefix} ->
+            case lists:member(Prefix, InclNs) of
+               true -> [Prefix | Needed];
+               _ -> Needed
+            end;
          {Ns, _Name} ->
             case lists:member(Ns, Needed) of
                true -> Needed;
@@ -131,24 +135,24 @@ xml_safe_string(Term, Quotes) ->
 %%      for a given XML "thing" (element/attribute/whatever)
 %% @internal
 -type xml_thing() :: #xmlDocument{} | #xmlElement{} | #xmlAttribute{} | #xmlPI{} | #xmlText{} | #xmlComment{}.
--spec c14n(XmlThing :: xml_thing(), KnownNs :: [{string(), string()}], ActiveNS :: [string()], Comments :: boolean(), Acc :: [string() | number()]) -> [string() | number()].
+-spec c14n(XmlThing :: xml_thing(), KnownNs :: [{string(), string()}], ActiveNS :: [string()], Comments :: boolean(), InclNs :: [string()], Acc :: [string() | number()]) -> [string() | number()].
 
-c14n(#xmlText{value = Text}, _KnownNS, _ActiveNS, _Comments, Acc) ->
+c14n(#xmlText{value = Text}, _KnownNS, _ActiveNS, _Comments, _InclNs, Acc) ->
    [xml_safe_string(Text) | Acc];
 
-c14n(#xmlComment{value = Text}, _KnownNS, _ActiveNS, true, Acc) ->
+c14n(#xmlComment{value = Text}, _KnownNS, _ActiveNS, true, _InclNs, Acc) ->
    ["-->", xml_safe_string(Text), "<!--" | Acc];
 
-c14n(#xmlPI{name = Name, value = Value}, _KnownNS, _ActiveNS, _Comments, Acc) ->
+c14n(#xmlPI{name = Name, value = Value}, _KnownNS, _ActiveNS, _Comments, _InclNs, Acc) ->
    NameString = if is_atom(Name) -> atom_to_list(Name); true -> string:strip(Name) end,
    case string:strip(Value) of
       [] -> ["?>", NameString, "<?" | Acc];
       _ -> ["?>", Value, " ", NameString, "<?" | Acc]
    end;
 
-c14n(#xmlDocument{content = Kids}, KnownNS, ActiveNS, Comments, Acc) ->
+c14n(#xmlDocument{content = Kids}, KnownNS, ActiveNS, Comments, InclNs, Acc) ->
    case lists:foldl(fun(Kid, AccIn) ->
-      case c14n(Kid, KnownNS, ActiveNS, Comments, AccIn) of
+      case c14n(Kid, KnownNS, ActiveNS, Comments, InclNs, AccIn) of
          AccIn -> AccIn;
          Other -> ["\n" | Other]
       end
@@ -157,7 +161,7 @@ c14n(#xmlDocument{content = Kids}, KnownNS, ActiveNS, Comments, Acc) ->
       Other -> Other
    end;
 
-c14n(#xmlAttribute{nsinfo = NsInfo, name = Name, value = Value}, _KnownNs, ActiveNS, _Comments, Acc) ->
+c14n(#xmlAttribute{nsinfo = NsInfo, name = Name, value = Value}, _KnownNs, ActiveNS, _Comments, _InclNs, Acc) ->
    case NsInfo of
       {Ns, NName} ->
          case lists:member(Ns, ActiveNS) of
@@ -168,7 +172,7 @@ c14n(#xmlAttribute{nsinfo = NsInfo, name = Name, value = Value}, _KnownNs, Activ
          ["\"",xml_safe_string(Value, true),"=\"",atom_to_list(Name)," " | Acc]
    end;
 
-c14n(Elem = #xmlElement{}, KnownNSIn, ActiveNSIn, Comments, Acc) ->
+c14n(Elem = #xmlElement{}, KnownNSIn, ActiveNSIn, Comments, InclNs, Acc) ->
    Namespace = Elem#xmlElement.namespace,
    Default = Namespace#xmlNamespace.default,
    {ActiveNS, ParentDefault} = case ActiveNSIn of
@@ -184,7 +188,7 @@ c14n(Elem = #xmlElement{}, KnownNSIn, ActiveNSIn, Comments, Acc) ->
    end, KnownNSIn, Namespace#xmlNamespace.nodes),
 
    % now figure out the minimum set of namespaces we need at this level
-   NeededNs = needed_ns(Elem),
+   NeededNs = needed_ns(Elem, InclNs),
    % and all of the attributes that aren't xmlns
    Attrs = clean_sort_attrs(Elem#xmlElement.attributes),
 
@@ -214,14 +218,14 @@ c14n(Elem = #xmlElement{}, KnownNSIn, ActiveNSIn, Comments, Acc) ->
    end, Acc2, lists:sort(NewNS)),
    % any other attributes
    Acc4 = lists:foldl(fun(Attr, AccIn) ->
-      c14n(Attr, KnownNS, FinalActiveNS, Comments, AccIn)
+      c14n(Attr, KnownNS, FinalActiveNS, Comments, InclNs, AccIn)
    end, Acc3, Attrs),
    % close the opening tag
    Acc5 = [">" | Acc4],
 
    % now accumulate all our children
    Acc6 = lists:foldl(fun(Kid, AccIn) ->
-      c14n(Kid, KnownNS, FinalActiveNS, Comments, AccIn)
+      c14n(Kid, KnownNS, FinalActiveNS, Comments, InclNs, AccIn)
    end, Acc5, Elem#xmlElement.content),
 
    % and finally add the close tag
@@ -233,7 +237,7 @@ c14n(Elem = #xmlElement{}, KnownNSIn, ActiveNSIn, Comments, Acc) ->
    end;
 
 % I do not give a shit
-c14n(_, _KnownNS, _ActiveNS, _Comments, Acc) ->
+c14n(_, _KnownNS, _ActiveNS, _Comments, _InclNs, Acc) ->
    Acc.
 
 %% @doc Puts an XML document or element into canonical form, as a string.
@@ -242,9 +246,20 @@ c14n(Elem) ->
    c14n(Elem, true).
 
 %% @doc Puts an XML document or element into canonical form, as a string.
+%%
+%% If the Comments argument is true, preserves comments in the output.
 -spec c14n(XmlThing :: xml_thing(), Comments :: boolean()) -> string().
 c14n(Elem, Comments) ->
-   lists:flatten(lists:reverse(c14n(Elem, [], [], Comments, []))).
+   c14n(Elem, Comments, []).
+
+%% @doc Puts an XML document or element into canonical form, as a string.
+%%
+%% If the Comments argument is true, preserves comments in the output. Any
+%% namespace prefixes listed in InclusiveNs will be left as they are and not
+%% modified during canonicalization.
+-spec c14n(XmlThing :: xml_thing(), Comments :: boolean(), InclusiveNs :: [string()]) -> string().
+c14n(Elem, Comments, InclusiveNs) ->
+   lists:flatten(lists:reverse(c14n(Elem, [], [], Comments, InclusiveNs, []))).
 
 
 -ifdef(TEST).
@@ -270,16 +285,21 @@ needed_ns_test() ->
    Ns = #xmlNamespace{nodes = [{"foo", 'urn:foo:'}, {"bar", 'urn:bar:'}]},
 
    E1 = esaml:build_nsinfo(Ns, #xmlElement{name = 'foo:Blah', attributes = [#xmlAttribute{name = 'bar:name', value="foo"}]}),
-   ["bar", "foo"] = lists:sort(needed_ns(E1)),
+   ["bar", "foo"] = lists:sort(needed_ns(E1, [])),
 
    E2 = esaml:build_nsinfo(Ns, #xmlElement{name = 'Blah', attributes = [#xmlAttribute{name = 'bar:name', value = "foo"}]}),
-   ["bar"] = needed_ns(E2),
+   ["bar"] = needed_ns(E2, []),
 
    E3 = esaml:build_nsinfo(Ns, #xmlElement{name = 'Blah', attributes = [#xmlAttribute{name = 'name', value = "foo"}], content = [#xmlElement{name = 'foo:InnerBlah'}]}),
-   [] = needed_ns(E3),
+   [] = needed_ns(E3, []),
 
    E4 = esaml:build_nsinfo(Ns, #xmlElement{name = 'Blah'}),
-   [] = needed_ns(E4).
+   [] = needed_ns(E4, []),
+   [] = needed_ns(E4, ["foo"]),
+
+   {E5, []} = xmerl_scan:string("<foo:a xmlns:foo=\"urn:foo:\" xmlns:bar=\"urn:bar:\"><foo:b bar:nothing=\"something\">foo</foo:b></foo:a>", [{namespace_conformant, true}]),
+   ["foo"] = needed_ns(E5, []),
+   ["bar", "foo"] = needed_ns(E5, ["bar"]).
 
 xml_safe_string_test() ->
    "foo" = xml_safe_string('foo'),
@@ -329,5 +349,14 @@ default_ns_test() ->
 
    Target2 = "<saml2p:Response xmlns:saml2p=\"urn:oasis:names:tc:SAML:2.0:protocol\" Destination=\"https://10.10.18.25/saml/consume\" ID=\"_83dbf3f1-53c2-4f49-b294-7c19cbf2b77b\" IssueInstant=\"2013-10-30T11:15:47.517Z\" Version=\"2.0\"><Assertion xmlns=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_debe5f4e-4343-4f95-b997-89db5a483202\" IssueInstant=\"2013-10-30T11:15:47.517Z\" Version=\"2.0\"><Issuer>foo</Issuer><Subject><NameID Format=\"urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified\"></NameID><SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\"><SubjectConfirmationData NotOnOrAfter=\"2013-10-30T12:15:47.517Z\" Recipient=\"https://10.10.18.25/saml/consume\"></SubjectConfirmationData></SubjectConfirmation></Subject></Assertion></saml2p:Response>",
    Target2 = c14n(Doc2, true).
+
+c14n_inclns_test() ->
+   {Doc, []} = xmerl_scan:string("<foo:a xmlns:foo=\"urn:foo:\" xmlns:bar=\"urn:bar:\"><foo:b bar:nothing=\"something\">foo</foo:b></foo:a>", [{namespace_conformant, true}]),
+
+   Target1 = "<foo:a xmlns:foo=\"urn:foo:\"><foo:b xmlns:bar=\"urn:bar:\" bar:nothing=\"something\">foo</foo:b></foo:a>",
+   Target1 = c14n(Doc, false),
+
+   Target2 = "<foo:a xmlns:bar=\"urn:bar:\" xmlns:foo=\"urn:foo:\"><foo:b bar:nothing=\"something\">foo</foo:b></foo:a>",
+   Target2 = c14n(Doc, false, ["bar"]).
 
 -endif.
