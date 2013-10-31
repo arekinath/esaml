@@ -118,13 +118,24 @@ sign(ElementIn, PrivateKey, CertBin) ->
 %% than rsa+sha1 this will asplode. Don't say I didn't warn you.
 -spec verify(Element :: #xmlElement{}, Fingerprints :: [binary()] | any) -> ok | {error, bad_digest | bad_signature | cert_not_accepted}.
 verify(Element, Fingerprints) ->
-   CanonXml = xmerl_c14n:c14n(strip(Element)),
+   DsNs = [{"ds", 'http://www.w3.org/2000/09/xmldsig#'},
+      {"ec", 'http://www.w3.org/2001/10/xml-exc-c14n#'}],
 
-   DsNs = [{"ds", 'http://www.w3.org/2000/09/xmldsig#'}],
-   [#xmlText{value = Sha64}] = xmerl_xpath:string("ds:Signature/ds:SignedInfo/ds:Reference/ds:DigestValue/text()", Element, [{namespace, DsNs}]),
+   [#xmlAttribute{value = "http://www.w3.org/2001/10/xml-exc-c14n#"}] = xmerl_xpath:string("ds:Signature/ds:SignedInfo/ds:CanonicalizationMethod/@Algorithm", Element, [{namespace, DsNs}]),
+   [#xmlAttribute{value = "http://www.w3.org/2000/09/xmldsig#rsa-sha1"}] = xmerl_xpath:string("ds:Signature/ds:SignedInfo/ds:SignatureMethod/@Algorithm", Element, [{namespace, DsNs}]),
+   [C14nTx = #xmlElement{}] = xmerl_xpath:string("ds:Signature/ds:SignedInfo/ds:Reference/ds:Transforms/ds:Transform[@Algorithm='http://www.w3.org/2001/10/xml-exc-c14n#']", Element, [{namespace, DsNs}]),
+   InclNs = case xmerl_xpath:string("ec:InclusiveNamespaces/@PrefixList", C14nTx, [{namespace, DsNs}]) of
+      [] -> [];
+      [#xmlAttribute{value = NsList}] -> string:tokens(NsList, " ,")
+   end,
+
+   CanonXml = xmerl_c14n:c14n(strip(Element), false, InclNs),
    CanonXmlUtf8 = unicode:characters_to_binary(CanonXml, unicode, utf8),
    CanonSha = crypto:sha(CanonXmlUtf8),
+
+   [#xmlText{value = Sha64}] = xmerl_xpath:string("ds:Signature/ds:SignedInfo/ds:Reference/ds:DigestValue/text()", Element, [{namespace, DsNs}]),
    CanonSha2 = base64:decode(Sha64),
+
    if not (CanonSha =:= CanonSha2) ->
       {error, bad_digest};
 
