@@ -27,7 +27,10 @@ datetime_to_saml(Time) ->
 -spec saml_to_datetime(Stamp :: binary() | string()) -> calendar:datetime().
 saml_to_datetime(Stamp) ->
     StampBin = if is_list(Stamp) -> list_to_binary(Stamp); true -> Stamp end,
-    <<YBin:4/binary-unit:8, "-", MoBin:2/binary-unit:8, "-", DBin:2/binary-unit:8, "T", HBin:2/binary-unit:8, ":", MiBin:2/binary-unit:8, ":", SBin:2/binary-unit:8, "Z">> = StampBin,
+    <<YBin:4/binary, "-", MoBin:2/binary, "-", DBin:2/binary, "T",
+        HBin:2/binary, ":", MiBin:2/binary, ":", SBin:2/binary, Rest/binary>> = StampBin,
+    %% check that time in UTC timezone because we don't handle another timezones properly
+    $Z = binary:last(Rest),
     F = fun(B) -> list_to_integer(binary_to_list(B)) end,
     {{F(YBin), F(MoBin), F(DBin)}, {F(HBin), F(MiBin), F(SBin)}}.
 
