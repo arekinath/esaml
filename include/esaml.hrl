@@ -26,11 +26,21 @@
 -record(esaml_subject, {name :: string(),
 	confirmation_method = bearer :: atom(), notonorafter :: string()}).
 
--record(esaml_assertion, {version = "2.0" :: string(), issue_instant :: string(), recipient :: string(), issuer :: string(), subject :: #esaml_subject{}, conditions = [], attributes = []}).
+-record(esaml_assertion, {version = "2.0" :: string(), issue_instant :: string(),
+	recipient :: string(), issuer :: string(), subject :: #esaml_subject{},
+	conditions = [], attributes = []}).
 
 -type esaml_status_code() :: success | request_error | response_error | bad_version | authn_failed | bad_attr | denied | bad_binding.
--record(esaml_response, {version = "2.0" :: string(), issue_instant :: string(), destination :: string(), issuer :: string(), status :: esaml_status_code(), assertion :: #esaml_assertion{}}).
+-record(esaml_response, {version = "2.0" :: string(), issue_instant :: string(),
+	destination :: string(), issuer :: string(), status :: esaml_status_code(),
+	assertion :: #esaml_assertion{}}).
 
 %% state records
 
--record(esaml_sp, {module, modargs = [], org = #esaml_org{}, tech = #esaml_contact{}, key, certificate, sign_requests = false, sign_assertions = true, sign_metadata = false, trusted_fingerprints = [], metadata_uri, consume_uri}).
+-record(esaml_sp, {
+	module :: atom(), modargs = [] :: [term()],
+	org = #esaml_org{} :: #esaml_org{}, tech = #esaml_contact{} :: #esaml_contact{},
+	key :: binary(), certificate :: binary(),
+	sp_sign_requests = false, idp_signs_assertions = true, idp_signs_envelopes = true,
+	sp_sign_metadata = false, trusted_fingerprints = [string() | binary()],
+	metadata_uri :: string(), consume_uri :: string()}).

@@ -46,17 +46,17 @@ setup(SP = #esaml_sp{trusted_fingerprints = FPs, metadata_uri = MetaURI,
 	end, FPSources),
 	case MetaURI of undefined -> error("must specify metadata URI"); _ -> ok end,
 	case ConsumeURI of undefined -> error("must specify consume URI"); _ -> ok end,
-	if (SP#esaml_sp.key =:= undefined) andalso (SP#esaml_sp.sign_requests) ->
+	if (SP#esaml_sp.key =:= undefined) andalso (SP#esaml_sp.sp_sign_requests) ->
 		error("must specify a key to sign requests");
 	true -> ok
 	end,
 	if (not (SP#esaml_sp.key =:= undefined)) and (not (SP#esaml_sp.certificate =:= undefined)) ->
-		SP#esaml_sp{sign_requests = true, sign_metadata = true, trusted_fingerprints = Fingerprints};
+		SP#esaml_sp{sp_sign_requests = true, sp_sign_metadata = true, trusted_fingerprints = Fingerprints};
 	true ->
 		SP#esaml_sp{trusted_fingerprints = Fingerprints}
 	end.
 
-consume(Xml, Req, SP = #esaml_sp{}) ->
+consume(Xml, Args, SP = #esaml_sp{}) ->
 	Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
 		  {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
 	threaduntil([
@@ -67,19 +67,21 @@ consume(Xml, Req, SP = #esaml_sp{}) ->
 			end
 		end,
 		fun(A) ->
-			if SP#esaml_sp.sign_assertions ->
+			if SP#esaml_sp.idp_signs_envelopes ->
 				case xmerl_dsig:verify(Xml, SP#esaml_sp.trusted_fingerprints) of
 					ok -> A;
 					OuterError -> {error, {outer_sig, OuterError}}
-				end
+				end;
+			true -> A
 			end
 		end,
 		fun(A) ->
-			if SP#esaml_sp.sign_assertions ->
+			if SP#esaml_sp.idp_signs_assertions ->
 				case xmerl_dsig:verify(A, SP#esaml_sp.trusted_fingerprints) of
 					ok -> A;
 					OuterError -> {error, {inner_sig, OuterError}}
-				end
+				end;
+			true -> A
 			end
 		end,
 		fun(A) ->
@@ -104,7 +106,7 @@ authn_request(IdpURL, SP = #esaml_sp{metadata_uri = MetaURI, consume_uri = Consu
 									   destination = IdpURL,
 									   issuer = MetaURI,
 									   consumer_location = ConsumeURI}),
-	if SP#esaml_sp.sign_requests ->
+	if SP#esaml_sp.sp_sign_requests ->
 		xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
 	true ->
 		Xml
@@ -114,12 +116,12 @@ metadata(SP = #esaml_sp{org = Org, tech = Tech}) ->
 	Xml = esaml:to_xml(#esaml_sp_metadata{
 		org = Org,
 		tech = Tech,
-		signed_requests = SP#esaml_sp.sign_requests,
-		signed_assertions = SP#esaml_sp.sign_assertions,
+		signed_requests = SP#esaml_sp.sp_sign_requests,
+		signed_assertions = SP#esaml_sp.idp_signs_assertions or SP#esaml_sp.idp_signs_envelopes,
 		certificate = SP#esaml_sp.certificate,
 		consumer_location = SP#esaml_sp.consume_uri,
 		entity_id = SP#esaml_sp.metadata_uri}),
-	if SP#esaml_sp.sign_metadata ->
+	if SP#esaml_sp.sp_sign_metadata ->
 		xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
 	true ->
 		Xml
