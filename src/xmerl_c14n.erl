@@ -284,16 +284,16 @@ canon_name_default_ns_test() ->
 needed_ns_test() ->
    Ns = #xmlNamespace{nodes = [{"foo", 'urn:foo:'}, {"bar", 'urn:bar:'}]},
 
-   E1 = esaml:build_nsinfo(Ns, #xmlElement{name = 'foo:Blah', attributes = [#xmlAttribute{name = 'bar:name', value="foo"}]}),
+   E1 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'foo:Blah', attributes = [#xmlAttribute{name = 'bar:name', value="foo"}]}),
    ["bar", "foo"] = lists:sort(needed_ns(E1, [])),
 
-   E2 = esaml:build_nsinfo(Ns, #xmlElement{name = 'Blah', attributes = [#xmlAttribute{name = 'bar:name', value = "foo"}]}),
+   E2 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'Blah', attributes = [#xmlAttribute{name = 'bar:name', value = "foo"}]}),
    ["bar"] = needed_ns(E2, []),
 
-   E3 = esaml:build_nsinfo(Ns, #xmlElement{name = 'Blah', attributes = [#xmlAttribute{name = 'name', value = "foo"}], content = [#xmlElement{name = 'foo:InnerBlah'}]}),
+   E3 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'Blah', attributes = [#xmlAttribute{name = 'name', value = "foo"}], content = [#xmlElement{name = 'foo:InnerBlah'}]}),
    [] = needed_ns(E3, []),
 
-   E4 = esaml:build_nsinfo(Ns, #xmlElement{name = 'Blah'}),
+   E4 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'Blah'}),
    [] = needed_ns(E4, []),
    [] = needed_ns(E4, ["foo"]),
 

@@ -42,5 +42,5 @@
 	org = #esaml_org{} :: #esaml_org{}, tech = #esaml_contact{} :: #esaml_contact{},
 	key :: binary(), certificate :: binary(),
 	sp_sign_requests = false, idp_signs_assertions = true, idp_signs_envelopes = true,
-	sp_sign_metadata = false, trusted_fingerprints = [string() | binary()],
+	sp_sign_metadata = false, trusted_fingerprints :: [string() | binary()],
 	metadata_uri :: string(), consume_uri :: string()}).

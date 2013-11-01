@@ -8,39 +8,30 @@
 
 -module(esaml).
 -behaviour(application).
+-behaviour(supervisor).
 
 -include_lib("xmerl/include/xmerl.hrl").
 -include_lib("public_key/include/public_key.hrl").
 -include("esaml.hrl").
 
--export([start/2, stop/1]).
--export([datetime_to_saml/1, saml_to_datetime/1]).
+-export([start/2, stop/1, init/1]).
+-export([stale_time/1]).
 -export([config/2, config/1, to_xml/1, decode_response/1, decode_assertion/1, validate_assertion/3]).
--export([build_nsinfo/2]).
 
 start(_StartType, _StartArgs) ->
-	Pid = spawn(fun() ->
-		register(esaml_ets_table_owner, self()),
-		ets:new(esaml_assertion_seen, [set, public, named_table]),
-		ets_table_owner()
-	end),
-	{ok, Pid}.
+	supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 stop(_State) ->
 	ok.
 
-%% @doc Converts a calendar:datetime() into SAML time string
--spec datetime_to_saml(Time :: calendar:datetime()) -> string().
-datetime_to_saml(Time) ->
-	{{Y,Mo,D}, {H, Mi, S}} = Time,
-	lists:flatten(io_lib:format("~4.10.0B-~2.10.0B-~2.10.0BT~2.10.0B:~2.10.0B:~2.10.0BZ", [Y, Mo, D, H, Mi, S])).
-
--spec saml_to_datetime(Stamp :: binary() | string()) -> calendar:datetime().
-saml_to_datetime(Stamp) ->
-	StampBin = if is_list(Stamp) -> list_to_binary(Stamp); true -> Stamp end,
-	<<YBin:4/binary-unit:8, "-", MoBin:2/binary-unit:8, "-", DBin:2/binary-unit:8, "T", HBin:2/binary-unit:8, ":", MiBin:2/binary-unit:8, ":", SBin:2/binary-unit:8, "Z">> = StampBin,
-	F = fun(B) -> list_to_integer(binary_to_list(B)) end,
-	{{F(YBin), F(MoBin), F(DBin)}, {F(HBin), F(MiBin), F(SBin)}}.
+%% @internal
+init([]) ->
+	DupeEts = {esaml_ets_table_owner,
+		{esaml_util, start_ets, []},
+		permanent, 5000, worker, [esaml]},
+	{ok,
+		{{one_for_one, 60, 600},
+		[DupeEts]}}.
 
 %% @doc Retrieve a config record
 config(N) -> config(N, undefined).
@@ -48,31 +39,6 @@ config(N, D) ->
 	case application:get_env(esaml, N) of
 		{ok, V} -> V;
 		_ -> D
-	end.
-
--spec folduntil(F :: fun(), Acc :: term(), List :: []) -> AccOut :: term().
-folduntil(F, Acc, []) -> Acc;
-folduntil(F, Acc, [Next | Rest]) ->
-	case F(Next, Acc) of
-		{stop, AccOut} -> AccOut;
-		NextAcc -> folduntil(F, NextAcc, Rest)
-	end.
-
-thread([], Acc) -> Acc;
-thread([F | Rest], Acc) ->
-	thread(Rest, F(Acc)).
-
-threaduntil([], Acc) -> {ok, Acc};
-threaduntil([F | Rest], Acc) ->
-	case (catch F(Acc)) of
-		{'EXIT', Reason} ->
-			{error, Reason};
-		{error, Reason} ->
-			{error, Reason};
-		{stop, LastAcc} ->
-			{ok, LastAcc};
-		NextAcc ->
-			threaduntil(Rest, NextAcc)
 	end.
 
 response_map_status_code(R = #esaml_response{status = Code}) ->
@@ -145,7 +111,7 @@ common_attrib_map(Other) -> list_to_atom(Other).
 decode_response(Xml) ->
 	Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
 		  {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
-	threaduntil([
+	esaml_util:threaduntil([
 		?xpath_attr_required("/samlp:Response/@Version", esaml_response, version, bad_version),
 		?xpath_attr_required("/samlp:Response/@IssueInstant", esaml_response, issue_instant, bad_response),
 		?xpath_attr("/samlp:Response/@Destination", esaml_response, destination),
@@ -158,7 +124,7 @@ decode_response(Xml) ->
 decode_assertion(Xml) ->
 	Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
 		  {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
-	threaduntil([
+	esaml_util:threaduntil([
 		?xpath_attr_required("/saml:Assertion/@Version", esaml_assertion, version, bad_version),
 		?xpath_attr_required("/saml:Assertion/@IssueInstant", esaml_assertion, issue_instant, bad_assertion),
 		?xpath_attr_required("/saml:Assertion/saml:Subject/saml:SubjectConfirmation/saml:SubjectConfirmationData/@Recipient", esaml_assertion, recipient, bad_recipient),
@@ -170,7 +136,7 @@ decode_assertion(Xml) ->
 
 decode_assertion_subject(Xml) ->
 	Ns = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
-	threaduntil([
+	esaml_util:threaduntil([
 		?xpath_text("/saml:Subject/saml:NameID/text()", esaml_subject, name),
 		?xpath_attr("/saml:Subject/saml:SubjectConfirmation/@Method", esaml_subject, confirmation_method),
 		?xpath_attr("/saml:Subject/saml:SubjectConfirmation/saml:SubjectConfirmationData/@NotOnOrAfter", esaml_subject, notonorafter),
@@ -179,7 +145,7 @@ decode_assertion_subject(Xml) ->
 
 decode_assertion_conditions(Xml) ->
 	Ns = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
-	threaduntil([
+	esaml_util:threaduntil([
 		fun(C) ->
 			case xmerl_xpath:string("/saml:Conditions/@NotBefore", Xml, [{namespace, Ns}]) of
 				[#xmlAttribute{value = V}] -> [{not_before, V} | C]; _ -> C
@@ -218,19 +184,16 @@ decode_assertion_attributes(Xml) ->
 		end
 	end, [], Attrs)}.
 
-ets_table_owner() ->
-	receive
-		stop -> ok;
-		_ -> ets_table_owner()
-	end.
-
+%% @doc Returns the time at which an assertion is considered stale.
+-spec stale_time(#esaml_assertion{}) -> integer().
 stale_time(A) ->
-	thread([
+	esaml_util:thread([
 		fun(T) ->
 			case A#esaml_assertion.subject of
 				#esaml_subject{notonorafter = undefined} -> T;
 				#esaml_subject{notonorafter = Restrict} ->
-					Secs = calendar:datetime_to_gregorian_seconds(saml_to_datetime(Restrict)),
+					Secs = calendar:datetime_to_gregorian_seconds(
+						esaml_util:saml_to_datetime(Restrict)),
 					if (Secs < T) -> Secs; true -> T end;
 				_ -> T
 			end
@@ -240,14 +203,16 @@ stale_time(A) ->
 			case proplists:get_value(not_on_or_after, Conds) of
 				undefined -> T;
 				Restrict ->
-					Secs = calendar:datetime_to_gregorian_seconds(saml_to_datetime(Restrict)),
+					Secs = calendar:datetime_to_gregorian_seconds(
+						esaml_util:saml_to_datetime(Restrict)),
 					if (Secs < T) -> Secs; true -> T end
 			end
 		end,
 		fun(T) ->
 			if (T =:= none) ->
 				II = A#esaml_assertion.issue_instant,
-				IISecs = calendar:datetime_to_gregorian_seconds(saml_to_datetime(II)),
+				IISecs = calendar:datetime_to_gregorian_seconds(
+					esaml_util:saml_to_datetime(II)),
 				IISecs + 5*60;
 			true ->
 				T
@@ -265,53 +230,12 @@ check_stale(A) ->
 		A
 	end.
 
-check_dupe(A, Xml) ->
-	Now = erlang:localtime_to_universaltime(erlang:localtime()),
-	NowSecs = calendar:datetime_to_gregorian_seconds(Now),
-	DeathSecs = stale_time(A),
-	Digest = crypto:sha(
-		unicode:characters_to_binary(xmerl_c14n:c14n(xmerl_dsig:strip(Xml)))),
-	{ResL, _BadNodes} = rpc:multicall(erlang, apply, [fun() ->
-		case (catch ets:lookup(esaml_assertion_seen, Digest)) of
-			[{Digest, seen} | _] -> seen;
-			_ -> ok
-		end
-	end, []]),
-	case lists:member(seen, ResL) of
-		true ->
-			{error, duplicate_assertion};
-		_ ->
-			Until = DeathSecs - NowSecs + 1,
-			rpc:multicall(erlang, apply, [fun() ->
-				case ets:info(esaml_assertion_seen) of
-					undefined ->
-						Me = self(),
-						Pid = spawn(fun() ->
-							register(esaml_ets_table_owner, self()),
-							ets:new(esaml_assertion_seen, [set, public, named_table]),
-							ets:insert(esaml_assertion_seen, {Digest, seen}),
-							Me ! {self(), ping},
-							ets_table_owner()
-						end),
-						receive
-							{Pid, ping} -> ok
-						end;
-					_ ->
-						ets:insert(esaml_assertion_seen, {Digest, seen})
-				end,
-				{ok, _} = timer:apply_after(Until * 1000, erlang, apply, [fun() ->
-					ets:delete(esaml_assertion_seen, Digest)
-				end, []])
-			end, []]),
-			ok
-	end.
-
 validate_assertion(AssertionXml, Recipient, Audience) ->
 	case decode_assertion(AssertionXml) of
 		{error, Reason} ->
 			{error, Reason};
 		{ok, Assertion} ->
-			threaduntil([
+			esaml_util:threaduntil([
 				fun(A) -> case A of
 					#esaml_assertion{version = "2.0"} -> A;
 					_ -> {error, bad_version}
@@ -329,33 +253,16 @@ validate_assertion(AssertionXml, Recipient, Audience) ->
 						end;
 					_ -> A
 				end end,
-				fun check_stale/1,
-				fun(A) -> case check_dupe(A, AssertionXml) of ok -> A; _ -> {error, duplicate_assertion} end end
+				fun check_stale/1
 			], Assertion)
 	end.
-
-%% @internal
--spec build_nsinfo(#xmlNamespace{}, #xmlElement{}) -> #xmlElement{}.
-build_nsinfo(Ns, Attr = #xmlAttribute{name = Name}) ->
-	case string:tokens(atom_to_list(Name), ":") of
-		[NsPrefix, Rest] -> Attr#xmlAttribute{namespace = Ns, nsinfo = {NsPrefix, Rest}};
-		_ -> Attr#xmlAttribute{namespace = Ns}
-	end;
-build_nsinfo(Ns, Elem = #xmlElement{name = Name, content = Kids, attributes = Attrs}) ->
-	Elem2 = case string:tokens(atom_to_list(Name), ":") of
-		[NsPrefix, Rest] -> Elem#xmlElement{namespace = Ns, nsinfo = {NsPrefix, Rest}};
-		_ -> Elem#xmlElement{namespace = Ns}
-	end,
-	Elem2#xmlElement{attributes = [build_nsinfo(Ns, Attr) || Attr <- Attrs],
-					content = [build_nsinfo(Ns, Kid) || Kid <- Kids]};
-build_nsinfo(_Ns, Other) -> Other.
 
 %% @doc Convert a SAML request/metadata record into XML
 to_xml(#esaml_authnreq{issue_instant = Time, destination = Dest, issuer = Issuer, consumer_location = Consumer}) ->
 	Ns = #xmlNamespace{nodes = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
 		  						{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
 
-	build_nsinfo(Ns, #xmlElement{name = 'samlp:AuthnRequest',
+	esaml_util:build_nsinfo(Ns, #xmlElement{name = 'samlp:AuthnRequest',
 		attributes = [#xmlAttribute{name = 'xmlns:samlp', value = proplists:get_value("samlp", Ns#xmlNamespace.nodes)},
 					  #xmlAttribute{name = 'xmlns:saml', value = proplists:get_value("saml", Ns#xmlNamespace.nodes)},
 					  #xmlAttribute{name = 'IssueInstant', value = Time},
@@ -421,7 +328,7 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
 		]
 	},
 
-	build_nsinfo(Ns, #xmlElement{
+	esaml_util:build_nsinfo(Ns, #xmlElement{
 		name = 'md:EntityDescriptor',
 		attributes = [
 			#xmlAttribute{name = 'xmlns:md', value = atom_to_list(proplists:get_value("md", Ns#xmlNamespace.nodes))},
@@ -438,28 +345,8 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
 to_xml(_) -> error("unknown record").
 
 
-
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
-
-build_nsinfo_test() ->
-	EmptyNs = #xmlNamespace{},
-	FooNs = #xmlNamespace{nodes = [{"foo", 'urn:foo:'}]},
-
-	E1 = #xmlElement{name = 'foo', content = [#xmlText{value = 'bar'}]},
-	E1 = build_nsinfo(EmptyNs, E1),
-
-	E2 = #xmlElement{name = 'foo:Blah', content = [#xmlText{value = 'bar'}]},
-	E2Ns = E2#xmlElement{nsinfo = {"foo", "Blah"}, namespace = FooNs},
-	E2Ns = build_nsinfo(FooNs, E2),
-
-	E3 = #xmlElement{name = 'blah:George', content = [E2]},
-	E3Ns = E3#xmlElement{nsinfo = {"blah", "George"}, namespace = FooNs, content = [E2Ns]},
-	E3Ns = build_nsinfo(FooNs, E3).
-
-datetime_test() ->
-	"2013-05-02T17:26:53Z" = datetime_to_saml({{2013,5,2},{17,26,53}}),
-	{{1990,11,23},{18,1,1}} = saml_to_datetime("1990-11-23T18:01:01Z").
 
 decode_response_test() ->
 	{Doc, _} = xmerl_scan:string("<samlp:Response xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" Version=\"2.0\" IssueInstant=\"2013-01-01T01:01:01Z\" Destination=\"foo\"></samlp:Response>", [{namespace_conformant, true}]),
@@ -516,11 +403,11 @@ decode_attributes_test() ->
 validate_assertion_test() ->
 	Now = erlang:localtime_to_universaltime(erlang:localtime()),
 	DeathSecs = calendar:datetime_to_gregorian_seconds(Now) + 1,
-	Death = esaml:datetime_to_saml(calendar:gregorian_seconds_to_datetime(DeathSecs)),
+	Death = esaml_util:datetime_to_saml(calendar:gregorian_seconds_to_datetime(DeathSecs)),
 
 	Ns = #xmlNamespace{nodes = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
 
-	E1 = build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
+	E1 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
 		attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}, #xmlAttribute{name = 'Version', value = "2.0"}, #xmlAttribute{name = 'IssueInstant', value = "now"}],
 		content = [
 			#xmlElement{name = 'saml:Subject', content = [
@@ -538,7 +425,7 @@ validate_assertion_test() ->
 	{error, bad_recipient} = validate_assertion(E1, "foo", "something"),
 	{error, bad_audience} = validate_assertion(E1, "foobar", "something"),
 
-	E2 = build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
+	E2 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
 		attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}, #xmlAttribute{name = 'Version', value = "2.0"}, #xmlAttribute{name = 'IssueInstant', value = "now"}],
 		content = [
 			#xmlElement{name = 'saml:Subject', content = [
@@ -549,47 +436,10 @@ validate_assertion_test() ->
 	}),
 	{error, bad_recipient} = validate_assertion(E2, "", "").
 
-validate_duplicate_assertion_test() ->
-	Now = erlang:localtime_to_universaltime(erlang:localtime()),
-	DeathSecs = calendar:datetime_to_gregorian_seconds(Now) + 1,
-	Death = esaml:datetime_to_saml(calendar:gregorian_seconds_to_datetime(DeathSecs)),
-
-	Ns = #xmlNamespace{nodes = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
-
-	E1 = build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
-		attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}, #xmlAttribute{name = 'Version', value = "2.0"}, #xmlAttribute{name = 'IssueInstant', value = "now"}],
-		content = [
-			#xmlElement{name = 'saml:Subject', content = [
-				#xmlElement{name = 'saml:SubjectConfirmation', content = [
-					#xmlElement{name = 'saml:SubjectConfirmationData',
-						attributes = [#xmlAttribute{name = 'Recipient', value = "foobar"},
-									  #xmlAttribute{name = 'NotOnOrAfter', value = Death}]
-					} ]} ]},
-			#xmlElement{name = 'saml:Conditions', content = [
-				#xmlElement{name = 'saml:AudienceRestriction', content = [
-					#xmlElement{name = 'saml:Audience', content = [#xmlText{value = "testAudience"}]}] }] } ]
-	}),
-	Digest = crypto:sha(
-		unicode:characters_to_binary(xmerl_c14n:c14n(xmerl_dsig:strip(E1)))),
-
-	[] = ets:lookup(esaml_assertion_seen, Digest),
-	{ok, _} = validate_assertion(E1, "foobar", "testAudience"),
-	[_] = ets:lookup(esaml_assertion_seen, Digest),
-	receive
-	after 500 ->
-		[_] = ets:lookup(esaml_assertion_seen, Digest),
-		{error, duplicate_assertion} = validate_assertion(E1, "foobar", "testAudience"),
-		receive
-		after 2000 ->
-			[] = ets:lookup(esaml_assertion_seen, Digest),
-			{error, stale_assertion} = validate_assertion(E1, "foobar", "testAudience")
-		end
-	end.
-
 validate_stale_assertion_test() ->
 	Ns = #xmlNamespace{nodes = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
-	OldStamp = esaml:datetime_to_saml({{1990,1,1}, {1,1,1}}),
-	E1 = build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
+	OldStamp = esaml_util:datetime_to_saml({{1990,1,1}, {1,1,1}}),
+	E1 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
 		attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}, #xmlAttribute{name = 'Version', value = "2.0"}, #xmlAttribute{name = 'IssueInstant', value = "now"}],
 		content = [
 			#xmlElement{name = 'saml:Subject', content = [

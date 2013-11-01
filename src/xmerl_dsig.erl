@@ -10,7 +10,7 @@
 
 -module(xmerl_dsig).
 
--export([verify/1, verify/2, sign/3, strip/1]).
+-export([verify/1, verify/2, sign/3, strip/1, digest/1]).
 
 -include_lib("xmerl/include/xmerl.hrl").
 -include_lib("public_key/include/public_key.hrl").
@@ -62,7 +62,7 @@ sign(ElementIn, PrivateKey, CertBin) ->
       crypto:sha(unicode:characters_to_binary(CanonXml, unicode, utf8))),
 
    Ns = #xmlNamespace{nodes = [{"ds", 'http://www.w3.org/2000/09/xmldsig#'}]},
-   SigInfo = esaml:build_nsinfo(Ns, #xmlElement{
+   SigInfo = esaml_util:build_nsinfo(Ns, #xmlElement{
       name = 'ds:SignedInfo',
       content = [
          #xmlElement{name = 'ds:CanonicalizationMethod',
@@ -94,7 +94,7 @@ sign(ElementIn, PrivateKey, CertBin) ->
    Cert64 = base64:encode_to_string(CertBin),
 
    % and wrap it all up with the signature and certificate
-   SigElem = esaml:build_nsinfo(Ns, #xmlElement{
+   SigElem = esaml_util:build_nsinfo(Ns, #xmlElement{
       name = 'ds:Signature',
       attributes = [#xmlAttribute{name = 'xmlns:ds', value = "http://www.w3.org/2000/09/xmldsig#"}],
       content = [
@@ -107,6 +107,29 @@ sign(ElementIn, PrivateKey, CertBin) ->
    }),
 
    Element#xmlElement{content = [SigElem | Element#xmlElement.content]}.
+
+%% @doc Returns the canonical SHA-1 digest of an (optionally signed) element
+%%
+%% Strips any XML digital signatures and applies any relevant InclusiveNamespaces
+%% before generating the digest.
+-spec digest(Element :: #xmlElement{}) -> binary().
+digest(Element) ->
+   DsNs = [{"ds", 'http://www.w3.org/2000/09/xmldsig#'},
+      {"ec", 'http://www.w3.org/2001/10/xml-exc-c14n#'}],
+
+   Txs = xmerl_xpath:string("ds:Signature/ds:SignedInfo/ds:Reference/ds:Transforms/ds:Transform[@Algorithm='http://www.w3.org/2001/10/xml-exc-c14n#']", Element, [{namespace, DsNs}]),
+   InclNs = case Txs of
+      [C14nTx = #xmlElement{}] ->
+         case xmerl_xpath:string("ec:InclusiveNamespaces/@PrefixList", C14nTx, [{namespace, DsNs}]) of
+            [] -> [];
+            [#xmlAttribute{value = NsList}] -> string:tokens(NsList, " ,")
+         end;
+      _ -> []
+   end,
+
+   CanonXml = xmerl_c14n:c14n(strip(Element), false, InclNs),
+   CanonXmlUtf8 = unicode:characters_to_binary(CanonXml, unicode, utf8),
+   crypto:sha(CanonXmlUtf8).
 
 %% @doc Verifies an XML digital signature on the given element.
 %%

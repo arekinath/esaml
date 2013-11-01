@@ -17,56 +17,14 @@
 
 -record(state, {idp_target, sp, max_saml_response_size}).
 
-ets_table_owner() ->
-	receive
-		stop -> ok;
-		_ -> ets_table_owner()
-	end.
-
 init(_Transport, Req, Options) ->
-	case {ets:info(esaml_privkey_cache), ets:info(esaml_certbin_cache)} of
-		{undefined, undefined} ->
-			Me = self(),
-			Pid = spawn(fun() ->
-				register(esaml_cowboy_ets_table_owner, self()),
-				ets:new(esaml_privkey_cache, [set, public, named_table]),
-				ets:new(esaml_certbin_cache, [set, public, named_table]),
-				Me ! {self(), ping},
-				ets_table_owner()
-			end),
-			receive
-				{Pid, ping} -> ok
-			end;
-		_ -> ok
-	end,
 	PrivKey = case proplists:get_value(sp_private_key, Options, esaml:config(sp_private_key)) of
 		undefined -> none;
-		PrivKeyPath ->
-			case ets:lookup(esaml_privkey_cache, PrivKeyPath) of
-				[{_, Key}] -> Key;
-				_ ->
-					{ok, KeyFile} = file:read_file(PrivKeyPath),
-					[KeyEntry] = public_key:pem_decode(KeyFile),
-					Key = case public_key:pem_entry_decode(KeyEntry) of
-						#'PrivateKeyInfo'{privateKey = KeyData} ->
-							public_key:der_decode('RSAPrivateKey', list_to_binary(KeyData));
-						Other -> Other
-					end,
-					ets:insert(esaml_privkey_cache, {PrivKeyPath, Key}),
-					Key
-			end
+		PrivKeyPath -> esaml_util:load_private_key(PrivKeyPath)
 	end,
 	Cert = case proplists:get_value(sp_certificate, Options, esaml:config(sp_certificate)) of
 		undefined -> none;
-		CertPath ->
-			case ets:lookup(esaml_certbin_cache, CertPath) of
-				[{_, CertBin}] -> CertBin;
-				_ ->
-					{ok, CertFile} = file:read_file(CertPath),
-					[{'Certificate', CertBin, not_encrypted}] = public_key:pem_decode(CertFile),
-					ets:insert(esaml_certbin_cache, {CertPath, CertBin}),
-					CertBin
-			end
+		CertPath -> esaml_util:load_certificate(CertPath)
 	end,
 	Tech = proplists:get_value(tech_contact, Options, esaml:config(tech_contact, [{name, "undefined"}, {email, "undefined"}])),
 

@@ -9,28 +9,17 @@
 -module(esaml_sp).
 
 -include("esaml.hrl").
+-include_lib("xmerl/include/xmerl.hrl").
 
--export([behaviour_info/1]).
--export([setup/1, authn_request/2, metadata/1, consume/3]).
+-export([setup/1, authn_request/2, metadata/1, consume/2, consume/3]).
 
-behaviour_info(callbacks) ->
-	[{init, 2}, {handle_assertion, 3}, {terminate, 2}];
-behaviour_info(_) ->
-	undefined.
+-callback init(Args :: term(), ModArgs :: term()) -> {ok, ModState :: term()}.
+-callback check_duplicate(Assertion :: #esaml_assertion{}, Sha1 :: binary(), ModState :: term()) -> {ok, ModState1 :: term()} | {duplicate, ModState1 :: term()}.
+-callback handle_consume(Assertion :: #esaml_assertion{}, ModState :: term()) -> {ok, ReturnValue :: term(), ModState1 :: term()}.
+-callback terminate(ModState :: term()) -> ok.
 
-threaduntil([], Acc) -> {ok, Acc};
-threaduntil([F | Rest], Acc) ->
-	case (catch F(Acc)) of
-		{'EXIT', Reason} ->
-			{error, Reason};
-		{error, Reason} ->
-			{error, Reason};
-		{stop, LastAcc} ->
-			{ok, LastAcc};
-		NextAcc ->
-			threaduntil(Rest, NextAcc)
-	end.
-
+%% @doc Initialize and validate an esaml_sp record
+-spec setup(#esaml_sp{}) -> #esaml_sp{}.
 setup(SP = #esaml_sp{trusted_fingerprints = FPs, metadata_uri = MetaURI,
 					 consume_uri = ConsumeURI}) ->
 	FPSources = FPs ++ esaml:config(trusted_fingerprints, []),
@@ -56,10 +45,17 @@ setup(SP = #esaml_sp{trusted_fingerprints = FPs, metadata_uri = MetaURI,
 		SP#esaml_sp{trusted_fingerprints = Fingerprints}
 	end.
 
+%% @doc Consume an assertion envelope in parsed XML
+-spec consume(Xml :: #xmlElement{} | #xmlDocument{}, #esaml_sp{}) -> {ok, ReturnValue :: term()} | {error, Reason :: term()}.
+consume(Xml, SP = #esaml_sp{}) ->
+	consume(Xml, [], SP).
+
+%% @doc Consume an assertion envelope in parsed XML, with additional arguments
+-spec consume(Xml :: #xmlElement{} | #xmlDocument{}, Args :: term(), #esaml_sp{}) -> {ok, ReturnValue :: term()} | {error, Reason :: term()}.
 consume(Xml, Args, SP = #esaml_sp{}) ->
 	Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
 		  {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
-	threaduntil([
+	esaml_util:threaduntil([
 		fun(X) ->
 			case xmerl_xpath:string("/samlp:Response/saml:Assertion", X, [{namespace, Ns}]) of
 				[A] -> A;
@@ -70,7 +66,7 @@ consume(Xml, Args, SP = #esaml_sp{}) ->
 			if SP#esaml_sp.idp_signs_envelopes ->
 				case xmerl_dsig:verify(Xml, SP#esaml_sp.trusted_fingerprints) of
 					ok -> A;
-					OuterError -> {error, {outer_sig, OuterError}}
+					OuterError -> {error, {envelope, OuterError}}
 				end;
 			true -> A
 			end
@@ -79,7 +75,7 @@ consume(Xml, Args, SP = #esaml_sp{}) ->
 			if SP#esaml_sp.idp_signs_assertions ->
 				case xmerl_dsig:verify(A, SP#esaml_sp.trusted_fingerprints) of
 					ok -> A;
-					OuterError -> {error, {inner_sig, OuterError}}
+					InnerError -> {error, {assertion, InnerError}}
 				end;
 			true -> A
 			end
@@ -91,16 +87,24 @@ consume(Xml, Args, SP = #esaml_sp{}) ->
 			end
 		end,
 		fun(AR) ->
-			{ok, Req2, ModState} = apply(SP#esaml_sp.module, init, [Req, SP#esaml_sp.modargs]),
-			{ok, Req3, ModState2} = apply(SP#esaml_sp.module, handle_assertion, [Req2, AR, ModState]),
-			ok = apply(SP#esaml_sp.module, terminate, [Req3, ModState2]),
-			{Req3, ModState2}
+			{ok, ModState} = apply(SP#esaml_sp.module, init, [Args, SP#esaml_sp.modargs]),
+			case apply(SP#esaml_sp.module, check_duplicate, [AR, xmerl_dsig:digest(Xml), ModState]) of
+				{ok, ModState2} ->
+					{ok, ReturnValue, ModState3} = apply(SP#esaml_sp.module, handle_assertion, [AR, ModState2]),
+					ok = apply(SP#esaml_sp.module, terminate, [ModState3]),
+					ReturnValue;
+				{duplicate, ModState2} ->
+					ok = apply(SP#esaml_sp.module, terminate, [ModState2]),
+					{error, duplicate}
+			end
 		end
 	], Xml).
 
+%% @doc Return an AuthnRequest as an XML element
+-spec authn_request(IdpURL :: string(), #esaml_sp{}) -> #xmlElement{}.
 authn_request(IdpURL, SP = #esaml_sp{metadata_uri = MetaURI, consume_uri = ConsumeURI}) ->
 	Now = erlang:localtime_to_universaltime(erlang:localtime()),
-	Stamp = esaml:datetime_to_saml(Now),
+	Stamp = esaml_util:datetime_to_saml(Now),
 
 	Xml = esaml:to_xml(#esaml_authnreq{issue_instant = Stamp,
 									   destination = IdpURL,
@@ -112,6 +116,8 @@ authn_request(IdpURL, SP = #esaml_sp{metadata_uri = MetaURI, consume_uri = Consu
 		Xml
 	end.
 
+%% @doc Return the SP metadata as an XML element
+-spec metadata(#esaml_sp{}) -> #xmlElement{}.
 metadata(SP = #esaml_sp{org = Org, tech = Tech}) ->
 	Xml = esaml:to_xml(#esaml_sp_metadata{
 		org = Org,
