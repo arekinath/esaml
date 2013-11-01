@@ -66,13 +66,9 @@ terminate(_Reason, _Req, _State) ->
 
 handle(Req, State) ->
 	{Method, Req2} = cowboy_req:method(Req),
-	{Path, Req3} = cowboy_req:path(Req2),
-	SplitPath = case binary:split(Path, <<"/">>, [global, trim]) of
-		[<<>> | Rest] -> Rest;
-		Else -> Else
-	end,
+	{Operation, Req3} = cowboy_req:binding(operation, Req2),
 	MethodAtom = list_to_atom(string:to_lower(binary_to_list(Method))),
-	{ok, Req4} = apply(?MODULE, MethodAtom, [SplitPath, Req3, State]),
+	{ok, Req4} = apply(?MODULE, MethodAtom, [Operation, Req3, State]),
 	{ok, Req4, State}.
 
 decode_saml_response(PostVals) ->
@@ -93,8 +89,8 @@ decode_saml_response(PostVals) ->
 			Other
 	end.
 
-post([_ | [<<"consume">>]], Req, #state{max_saml_response_size = MaxSamlResponseSize,
-											sp = SP}) ->
+post(<<"consume">>, Req, #state{max_saml_response_size = MaxSamlResponseSize,
+		sp = SP}) ->
 	{ok, PostVals, Req2} = cowboy_req:body_qs(MaxSamlResponseSize, Req),
 
 	case decode_saml_response(PostVals) of
@@ -103,7 +99,7 @@ post([_ | [<<"consume">>]], Req, #state{max_saml_response_size = MaxSamlResponse
 			cowboy_req:reply(403, [], <<"Failed to decode SAMLResponse value">>, Req2);
 		Xml ->
 			case SP:consume(Xml, Req2) of
-				{ok, {Req3, _}} ->
+				{ok, Req3} ->
 					{ok, Req3};
 				{error, Reason} ->
 					error_logger:warning_msg("Rejected SAML assertion for reason:\n  ~p\n  req = ~p\n", [Reason, Req2]),
@@ -132,7 +128,7 @@ generate_post_html(Dest, Req) ->
 </body>
 </html>">>.
 
-get([_ | [<<"auth">>]], Req, S = #state{sp = SP}) ->
+get(<<"auth">>, Req, S = #state{sp = SP}) ->
 	SignedXml = SP:authn_request(S#state.idp_target),
 	AuthnReq = lists:flatten(xmerl:export([SignedXml], xmerl_xml)),
 	Param = edoc_lib:escape_uri(base64:encode_to_string(zlib:zip(AuthnReq))),
@@ -154,7 +150,7 @@ get([_ | [<<"auth">>]], Req, S = #state{sp = SP}) ->
 		], <<"Redirecting...">>, Req)
 	end;
 
-get([_  | [<<"metadata">>]], Req, #state{sp = SP}) ->
+get(<<"metadata">>, Req, #state{sp = SP}) ->
 	SignedXml = SP:metadata(),
 	Metadata = xmerl:export([SignedXml], xmerl_xml),
 	cowboy_req:reply(200, [{<<"Content-Type">>, <<"text/xml">>}], Metadata, Req);

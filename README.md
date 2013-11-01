@@ -6,7 +6,7 @@ IDP functionality is planned to be added in the future.
 
 To use esaml in a cowboy app you need to do three things:
 
-1. Add the /saml/[...] route to esaml_cowboy_handler in your cowboy_router config
+1. Add the /saml/:operation route to esaml_cowboy_handler in your cowboy_router config
 2. Write a callback module that implements the esaml_sp behaviour
 3. Supply appropriate configuration to esaml, either via app.config or through the cowboy_router config
 

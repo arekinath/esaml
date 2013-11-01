@@ -15,7 +15,7 @@
 
 -callback init(Args :: term(), ModArgs :: term()) -> {ok, ModState :: term()}.
 -callback check_duplicate(Assertion :: #esaml_assertion{}, Sha1 :: binary(), ModState :: term()) -> {ok, ModState1 :: term()} | {duplicate, ModState1 :: term()}.
--callback handle_consume(Assertion :: #esaml_assertion{}, ModState :: term()) -> {ok, ReturnValue :: term(), ModState1 :: term()}.
+-callback handle_assertion(Assertion :: #esaml_assertion{}, ModState :: term()) -> {ok, ReturnValue :: term(), ModState1 :: term()}.
 -callback terminate(ModState :: term()) -> ok.
 
 %% @doc Initialize and validate an esaml_sp record
