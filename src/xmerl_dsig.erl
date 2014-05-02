@@ -282,16 +282,19 @@ sign_generate_id_test() ->
     [#xmlAttribute{value = "#" ++ RootId}] = xmerl_xpath:string("ds:Signature/ds:SignedInfo/ds:Reference/@URI", SignedXml, [{namespace, Ns}]).
 
 utf8_test() ->
-    XmlData = <<"<x:foo xmlns:x=\"urn:foo:x#\"><x:name attr=\"Игорь Карымов\">その人</x:name></x:foo>">>,
+    Name = <<208,152,208,179,208,190,209,128,209,140,32,208,154,
+      208,176,209,128,209,139,208,188,208,190,208,178,32>>,
+    ThisPerson = <<227,129,157,227,129,174,228,186,186,10>>,
+    XmlData = <<"<x:foo xmlns:x=\"urn:foo:x#\"><x:name attr=\"",Name/binary,"\">",ThisPerson/binary,"</x:name></x:foo>">>,
     {Doc, _} = xmerl_scan:string(binary_to_list(XmlData), [{namespace_conformant, true}]),
     {Key, CertBin} = test_sign_key(),
     SignedXml = sign(Doc, Key, CertBin),
     Ns = [{"ds", 'http://www.w3.org/2000/09/xmldsig#'}, {"x", 'urn:foo:x#'}],
     [#xmlAttribute{name = 'ID', value = RootId}] = xmerl_xpath:string("@ID", SignedXml, [{namespace, Ns}]),
     [#xmlAttribute{value = "#" ++ RootId}] = xmerl_xpath:string("ds:Signature/ds:SignedInfo/ds:Reference/@URI", SignedXml, [{namespace, Ns}]),
-    AttrValue = unicode:characters_to_list(<<"Игорь Карымов">>),
+    AttrValue = unicode:characters_to_list(Name),
     [#xmlAttribute{name = 'attr', value = AttrValue}] = xmerl_xpath:string("x:name/@attr", SignedXml, [{namespace, Ns}]),
-    TextValue = unicode:characters_to_list(<<"その人">>),
+    TextValue = unicode:characters_to_list(ThisPerson),
     [#xmlText{value = TextValue}] = xmerl_xpath:string("x:name/text()", SignedXml, [{namespace, Ns}]),
     ok = verify(SignedXml, [crypto:sha(CertBin)]).
 
