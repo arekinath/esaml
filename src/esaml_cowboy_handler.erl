@@ -135,9 +135,9 @@ decode_saml_response(PostVals) ->
 			Other
 	end.
 
-post([_ | [<<"consume">>]], Req, #state{max_saml_response_size = MaxSamlResponseSize,
+post([_ | [<<"consume">>]], Req, #state{max_saml_response_size = MaxSamlRespSize,
 											sp = SP}) ->
-	{ok, PostVals, Req2} = cowboy_req:body_qs(MaxSamlResponseSize, Req),
+	{ok, PostVals, Req2} = cowboy_req:body_qs(Req, [{length, MaxSamlRespSize},{read_length, MaxSamlRespSize},{read_timeout, 10000}]),
 
 	case decode_saml_response(PostVals) of
 		{error, Reason} ->
