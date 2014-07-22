@@ -20,6 +20,28 @@
 -export([config/2, config/1, to_xml/1, decode_response/1, decode_assertion/1, validate_assertion/3]).
 -export([decode_logout_request/1, decode_logout_response/1, decode_idp_metadata/1]).
 
+-type org() :: #esaml_org{}.
+-type contact() :: #esaml_contact{}.
+-type sp_metadata() :: #esaml_sp_metadata{}.
+-type idp_metadata() :: #esaml_idp_metadata{}.
+-type authnreq() :: #esaml_authnreq{}.
+-type subject() :: #esaml_subject{}.
+-type assertion() :: #esaml_assertion{}.
+-type logoutreq() :: #esaml_logoutreq{}.
+-type logoutresp() :: #esaml_logoutresp{}.
+-type response() :: #esaml_response{}.
+-type sp() :: #esaml_sp{}.
+
+-export_type([org/0, contact/0, sp_metadata/0, idp_metadata/0,
+    authnreq/0, subject/0, assertion/0, logoutreq/0,
+    logoutresp/0, response/0, sp/0]).
+
+-type localized_strings() :: [{Locale :: atom(), LocalizedString :: string()}].
+-type name_format() :: email | x509 | windows | krb | persistent | transient | unknown.
+-type logout_reason() :: user | admin.
+-type status_code() :: success | request_error | response_error | bad_version | authn_failed | bad_attr | denied | bad_binding.
+-export_type([localized_strings/0, name_format/0, logout_reason/0, status_code/0]).
+
 %% @private
 start(_StartType, _StartArgs) ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).

@@ -146,7 +146,7 @@ load_certificate(CertPath) ->
     end.
 
 %% @doc Reads IDP metadata from a URL (or ETS memory cache) and validates the signature
--spec load_metadata(Url :: string(), Fingerprints :: [string() | binary()]) -> #esaml_idp_metadata{}.
+-spec load_metadata(Url :: string(), Fingerprints :: [string() | binary()]) -> esaml:idp_metadata().
 load_metadata(Url, FPs) ->
     Fingerprints = convert_fingerprints(FPs),
     case ets:lookup(esaml_idp_meta_cache, Url) of
@@ -164,7 +164,7 @@ load_metadata(Url, FPs) ->
     end.
 
 %% @doc Reads IDP metadata from a URL (or ETS memory cache)
--spec load_metadata(Url :: string()) -> #esaml_idp_metadata{}.
+-spec load_metadata(Url :: string()) -> esaml:idp_metadata().
 load_metadata(Url) ->
     case ets:lookup(esaml_idp_meta_cache, Url) of
         [{Url, Meta}] -> Meta;
@@ -181,7 +181,7 @@ load_metadata(Url) ->
 %% This is a helper to be used as a DuplicateFun with esaml_sp:validate_assertion/3. 
 %% If you aren't using standard erlang distribution for your app, you probably don't 
 %% want to use this.
--spec check_dupe_ets(Assertion :: #esaml_assertion{}, Digest :: binary()) -> ok | {error, duplicate_assertion}.
+-spec check_dupe_ets(Assertion :: esaml:assertion(), Digest :: binary()) -> ok | {error, duplicate_assertion}.
 check_dupe_ets(A, Digest) ->
     Now = erlang:localtime_to_universaltime(erlang:localtime()),
     NowSecs = calendar:datetime_to_gregorian_seconds(Now),
