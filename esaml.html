@@ -18,23 +18,35 @@
 <h2><a name="types">Data Types</a></h2>
 
 <h3 class="typedecl"><a name="type-assertion">assertion()</a></h3>
-<p><tt>assertion() = #esaml_assertion{version = string(), issue_instant = undefined | string(), recipient = undefined | string(), issuer = undefined | string(), subject = undefined | <a href="esaml.html#type-subject">esaml:subject()</a>, conditions = any(), attributes = any()}</tt></p>
+<p><tt>assertion() = #esaml_assertion{version = <a href="esaml.html#type-version">esaml:version()</a>, issue_instant = <a href="esaml.html#type-datetime">esaml:datetime()</a>, recipient = string(), issuer = string(), subject = <a href="esaml.html#type-subject">esaml:subject()</a>, conditions = <a href="esaml.html#type-conditions">esaml:conditions()</a>, attributes = <a href="proplists.html#type-proplist">proplists:proplist()</a>}</tt></p>
 
 
 <h3 class="typedecl"><a name="type-authnreq">authnreq()</a></h3>
-<p><tt>authnreq() = #esaml_authnreq{version = any(), issue_instant = undefined | string(), destination = undefined | string(), issuer = undefined | string(), consumer_location = undefined | string()}</tt></p>
+<p><tt>authnreq() = #esaml_authnreq{version = <a href="esaml.html#type-version">esaml:version()</a>, issue_instant = <a href="esaml.html#type-datetime">esaml:datetime()</a>, destination = string(), issuer = string(), consumer_location = string()}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-condition">condition()</a></h3>
+<p><tt>condition() = {not_before, <a href="esaml.html#type-datetime">esaml:datetime()</a>} | {not_on_or_after, <a href="esaml.html#type-datetime">esaml:datetime()</a>} | {audience, string()}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-conditions">conditions()</a></h3>
+<p><tt>conditions() = [<a href="#type-condition">condition()</a>]</tt></p>
 
 
 <h3 class="typedecl"><a name="type-contact">contact()</a></h3>
-<p><tt>contact() = #esaml_contact{name = undefined | string(), email = undefined | string()}</tt></p>
+<p><tt>contact() = #esaml_contact{name = string(), email = string()}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-datetime">datetime()</a></h3>
+<p><tt>datetime() = string() | binary()</tt></p>
 
 
 <h3 class="typedecl"><a name="type-idp_metadata">idp_metadata()</a></h3>
-<p><tt>idp_metadata() = #esaml_idp_metadata{org = undefined | <a href="esaml.html#type-org">esaml:org()</a>, tech = undefined | <a href="esaml.html#type-contact">esaml:contact()</a>, signed_requests = undefined | boolean(), certificate = undefined | binary(), entity_id = undefined | string(), login_location = undefined | string(), logout_location = undefined | string(), name_format = <a href="esaml.html#type-name_format">esaml:name_format()</a>}</tt></p>
+<p><tt>idp_metadata() = #esaml_idp_metadata{org = <a href="esaml.html#type-org">esaml:org()</a>, tech = <a href="esaml.html#type-contact">esaml:contact()</a>, signed_requests = boolean(), certificate = binary() | undefined, entity_id = string(), login_location = string(), logout_location = string() | undefined, name_format = <a href="esaml.html#type-name_format">esaml:name_format()</a>}</tt></p>
 
 
-<h3 class="typedecl"><a name="type-localized_strings">localized_strings()</a></h3>
-<p><tt>localized_strings() = [{Locale::atom(), LocalizedString::string()}]</tt></p>
+<h3 class="typedecl"><a name="type-localized_string">localized_string()</a></h3>
+<p><tt>localized_string() = string() | [{Locale::atom(), LocalizedString::string()}]</tt></p>
 
 
 <h3 class="typedecl"><a name="type-logout_reason">logout_reason()</a></h3>
@@ -42,11 +54,11 @@
 
 
 <h3 class="typedecl"><a name="type-logoutreq">logoutreq()</a></h3>
-<p><tt>logoutreq() = #esaml_logoutreq{version = any(), issue_instant = undefined | string(), destination = undefined | string(), issuer = undefined | string(), name = undefined | string(), reason = undefined | <a href="esaml.html#type-logout_reason">esaml:logout_reason()</a>}</tt></p>
+<p><tt>logoutreq() = #esaml_logoutreq{version = <a href="esaml.html#type-version">esaml:version()</a>, issue_instant = <a href="esaml.html#type-datetime">esaml:datetime()</a>, destination = string(), issuer = string(), name = string(), reason = <a href="esaml.html#type-logout_reason">esaml:logout_reason()</a>}</tt></p>
 
 
 <h3 class="typedecl"><a name="type-logoutresp">logoutresp()</a></h3>
-<p><tt>logoutresp() = #esaml_logoutresp{version = any(), issue_instant = undefined | string(), destination = undefined | string(), issuer = undefined | string(), status = undefined | <a href="esaml.html#type-status_code">esaml:status_code()</a>}</tt></p>
+<p><tt>logoutresp() = #esaml_logoutresp{version = <a href="esaml.html#type-version">esaml:version()</a>, issue_instant = <a href="esaml.html#type-datetime">esaml:datetime()</a>, destination = string(), issuer = string(), status = <a href="esaml.html#type-status_code">esaml:status_code()</a>}</tt></p>
 
 
 <h3 class="typedecl"><a name="type-name_format">name_format()</a></h3>
@@ -54,19 +66,19 @@
 
 
 <h3 class="typedecl"><a name="type-org">org()</a></h3>
-<p><tt>org() = #esaml_org{name = undefined | string() | <a href="esaml.html#type-localized_strings">esaml:localized_strings()</a>, displayname = undefined | string() | <a href="esaml.html#type-localized_strings">esaml:localized_strings()</a>, url = undefined | string() | <a href="esaml.html#type-localized_strings">esaml:localized_strings()</a>}</tt></p>
+<p><tt>org() = #esaml_org{name = <a href="esaml.html#type-localized_string">esaml:localized_string()</a>, displayname = <a href="esaml.html#type-localized_string">esaml:localized_string()</a>, url = <a href="esaml.html#type-localized_string">esaml:localized_string()</a>}</tt></p>
 
 
 <h3 class="typedecl"><a name="type-response">response()</a></h3>
-<p><tt>response() = #esaml_response{version = string(), issue_instant = undefined | string(), destination = undefined | string(), issuer = undefined | string(), status = undefined | <a href="esaml.html#type-status_code">esaml:status_code()</a>, assertion = undefined | <a href="esaml.html#type-assertion">esaml:assertion()</a>}</tt></p>
+<p><tt>response() = #esaml_response{version = <a href="esaml.html#type-version">esaml:version()</a>, issue_instant = <a href="esaml.html#type-datetime">esaml:datetime()</a>, destination = string(), issuer = string(), status = <a href="esaml.html#type-status_code">esaml:status_code()</a>, assertion = <a href="esaml.html#type-assertion">esaml:assertion()</a>}</tt></p>
 
 
 <h3 class="typedecl"><a name="type-sp">sp()</a></h3>
-<p><tt>sp() = #esaml_sp{org = <a href="esaml.html#type-org">esaml:org()</a>, tech = <a href="esaml.html#type-contact">esaml:contact()</a>, key = undefined | binary(), certificate = undefined | binary(), sp_sign_requests = any(), idp_signs_assertions = any(), idp_signs_envelopes = any(), idp_signs_logout_requests = any(), sp_sign_metadata = any(), trusted_fingerprints = undefined | [string() | binary()], metadata_uri = undefined | string(), consume_uri = undefined | string(), logout_uri = undefined | string()}</tt></p>
+<p><tt>sp() = #esaml_sp{org = <a href="esaml.html#type-org">esaml:org()</a>, tech = <a href="esaml.html#type-contact">esaml:contact()</a>, key = binary() | undefined, certificate = binary() | undefined, sp_sign_requests = boolean(), idp_signs_assertions = boolean(), idp_signs_envelopes = boolean(), idp_signs_logout_requests = boolean(), sp_sign_metadata = boolean(), trusted_fingerprints = [string() | binary()], metadata_uri = string(), consume_uri = string(), logout_uri = string() | undefined}</tt></p>
 
 
 <h3 class="typedecl"><a name="type-sp_metadata">sp_metadata()</a></h3>
-<p><tt>sp_metadata() = #esaml_sp_metadata{org = undefined | <a href="esaml.html#type-org">esaml:org()</a>, tech = undefined | <a href="esaml.html#type-contact">esaml:contact()</a>, signed_requests = undefined | boolean(), signed_assertions = undefined | boolean(), certificate = undefined | binary(), entity_id = undefined | string(), consumer_location = undefined | string(), logout_location = undefined | string()}</tt></p>
+<p><tt>sp_metadata() = #esaml_sp_metadata{org = <a href="esaml.html#type-org">esaml:org()</a>, tech = <a href="esaml.html#type-contact">esaml:contact()</a>, signed_requests = boolean(), signed_assertions = boolean(), certificate = binary() | undefined, entity_id = string(), consumer_location = string(), logout_location = string() | undefined}</tt></p>
 
 
 <h3 class="typedecl"><a name="type-status_code">status_code()</a></h3>
@@ -74,7 +86,11 @@
 
 
 <h3 class="typedecl"><a name="type-subject">subject()</a></h3>
-<p><tt>subject() = #esaml_subject{name = undefined | string(), confirmation_method = atom(), notonorafter = undefined | string()}</tt></p>
+<p><tt>subject() = #esaml_subject{name = string(), confirmation_method = atom(), notonorafter = <a href="esaml.html#type-datetime">esaml:datetime()</a>}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-version">version()</a></h3>
+<p><tt>version() = string()</tt></p>
 
 
 <h2><a name="index">Function Index</a></h2>
@@ -96,6 +112,6 @@
 <hr>
 
 <div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
-<p><i>Generated by EDoc, Jul 22 2014, 23:31:08.</i></p>
+<p><i>Generated by EDoc, Jul 23 2014, 09:52:53.</i></p>
 </body>
 </html>
