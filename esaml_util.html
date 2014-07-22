@@ -1,0 +1,80 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>Module esaml_util</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<hr>
+
+<h1>Module esaml_util</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>Utility functions.
+
+
+<h2><a name="description">Description</a></h2>Utility functions
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#check_dupe_ets-2">check_dupe_ets/2</a></td><td>Checks for a duplicate assertion using ETS tables in memory on all available nodes.</td></tr>
+<tr><td valign="top"><a href="#convert_fingerprints-1">convert_fingerprints/1</a></td><td>Converts various ascii hex/base64 fingerprint formats to binary.</td></tr>
+<tr><td valign="top"><a href="#datetime_to_saml-1">datetime_to_saml/1</a></td><td>Converts a calendar:datetime() into SAML time string.</td></tr>
+<tr><td valign="top"><a href="#load_certificate-1">load_certificate/1</a></td><td>Loads a certificate from a file on disk (or ETS memory cache).</td></tr>
+<tr><td valign="top"><a href="#load_metadata-1">load_metadata/1</a></td><td>Reads IDP metadata from a URL (or ETS memory cache).</td></tr>
+<tr><td valign="top"><a href="#load_metadata-2">load_metadata/2</a></td><td>Reads IDP metadata from a URL (or ETS memory cache) and validates the signature.</td></tr>
+<tr><td valign="top"><a href="#load_private_key-1">load_private_key/1</a></td><td>Loads a private key from a file on disk (or ETS memory cache).</td></tr>
+<tr><td valign="top"><a href="#saml_to_datetime-1">saml_to_datetime/1</a></td><td>Converts a SAML time string into a calendar:datetime().</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="check_dupe_ets-2">check_dupe_ets/2</a></h3>
+<div class="spec">
+<p><tt>check_dupe_ets(Assertion::<a href="esaml.html#type-assertion">esaml:assertion()</a>, Digest::binary()) -&gt; ok | {error, duplicate_assertion}</tt><br></p>
+</div><p><p>Checks for a duplicate assertion using ETS tables in memory on all available nodes.</p>
+ 
+  This is a helper to be used as a DuplicateFun with esaml_sp:validate_assertion/3.
+  If you aren't using standard erlang distribution for your app, you probably don't
+  want to use this.</p>
+
+<h3 class="function"><a name="convert_fingerprints-1">convert_fingerprints/1</a></h3>
+<div class="spec">
+<p><tt>convert_fingerprints(FPs::[string() | binary()]) -&gt; [binary()]</tt><br></p>
+</div><p>Converts various ascii hex/base64 fingerprint formats to binary</p>
+
+<h3 class="function"><a name="datetime_to_saml-1">datetime_to_saml/1</a></h3>
+<div class="spec">
+<p><tt>datetime_to_saml(Time::<a href="calendar.html#type-datetime">calendar:datetime()</a>) -&gt; string()</tt><br></p>
+</div><p>Converts a calendar:datetime() into SAML time string</p>
+
+<h3 class="function"><a name="load_certificate-1">load_certificate/1</a></h3>
+<div class="spec">
+<p><tt>load_certificate(Path::string()) -&gt; binary()</tt><br></p>
+</div><p>Loads a certificate from a file on disk (or ETS memory cache)</p>
+
+<h3 class="function"><a name="load_metadata-1">load_metadata/1</a></h3>
+<div class="spec">
+<p><tt>load_metadata(Url::string()) -&gt; <a href="esaml.html#type-idp_metadata">esaml:idp_metadata()</a></tt><br></p>
+</div><p>Reads IDP metadata from a URL (or ETS memory cache)</p>
+
+<h3 class="function"><a name="load_metadata-2">load_metadata/2</a></h3>
+<div class="spec">
+<p><tt>load_metadata(Url::string(), Fingerprints::[string() | binary()]) -&gt; <a href="esaml.html#type-idp_metadata">esaml:idp_metadata()</a></tt><br></p>
+</div><p>Reads IDP metadata from a URL (or ETS memory cache) and validates the signature</p>
+
+<h3 class="function"><a name="load_private_key-1">load_private_key/1</a></h3>
+<div class="spec">
+<p><tt>load_private_key(Path::string()) -&gt; #'RSAPrivateKey'{}</tt><br></p>
+</div><p>Loads a private key from a file on disk (or ETS memory cache)</p>
+
+<h3 class="function"><a name="saml_to_datetime-1">saml_to_datetime/1</a></h3>
+<div class="spec">
+<p><tt>saml_to_datetime(Stamp::binary() | string()) -&gt; <a href="calendar.html#type-datetime">calendar:datetime()</a></tt><br></p>
+</div><p><p>Converts a SAML time string into a calendar:datetime()</p>
+ 
+  Inverse of datetime_to_saml/1</p>
+<hr>
+
+<div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jul 22 2014, 23:31:09.</i></p>
+</body>
+</html>

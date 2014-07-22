@@ -1,0 +1,83 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>Module esaml_sp</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<hr>
+
+<h1>Module esaml_sp</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>SAML Service Provider (SP) routines.
+
+
+<h2><a name="description">Description</a></h2>SAML Service Provider (SP) routines
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#generate_authn_request-2">generate_authn_request/2</a></td><td>Return an AuthnRequest as an XML element.</td></tr>
+<tr><td valign="top"><a href="#generate_logout_request-3">generate_logout_request/3</a></td><td>Return a LogoutRequest as an XML element.</td></tr>
+<tr><td valign="top"><a href="#generate_logout_response-3">generate_logout_response/3</a></td><td>Return a LogoutResponse as an XML element.</td></tr>
+<tr><td valign="top"><a href="#generate_metadata-1">generate_metadata/1</a></td><td>Return the SP metadata as an XML element.</td></tr>
+<tr><td valign="top"><a href="#setup-1">setup/1</a></td><td>Initialize and validate an esaml_sp record.</td></tr>
+<tr><td valign="top"><a href="#validate_assertion-2">validate_assertion/2</a></td><td>Validate and decode an assertion envelope in parsed XML.</td></tr>
+<tr><td valign="top"><a href="#validate_assertion-3">validate_assertion/3</a></td><td>Validate and decode an assertion envelope in parsed XML.</td></tr>
+<tr><td valign="top"><a href="#validate_logout_request-2">validate_logout_request/2</a></td><td>Validate and parse a LogoutRequest element.</td></tr>
+<tr><td valign="top"><a href="#validate_logout_response-2">validate_logout_response/2</a></td><td>Validate and parse a LogoutResponse element.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="generate_authn_request-2">generate_authn_request/2</a></h3>
+<div class="spec">
+<p><tt>generate_authn_request(IdpURL::string(), SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; #xmlElement{}</tt><br></p>
+</div><p>Return an AuthnRequest as an XML element</p>
+
+<h3 class="function"><a name="generate_logout_request-3">generate_logout_request/3</a></h3>
+<div class="spec">
+<p><tt>generate_logout_request(IdpURL::string(), NameID::string(), SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; #xmlElement{}</tt><br></p>
+</div><p>Return a LogoutRequest as an XML element</p>
+
+<h3 class="function"><a name="generate_logout_response-3">generate_logout_response/3</a></h3>
+<div class="spec">
+<p><tt>generate_logout_response(IdpUR::string(), Status::<a href="esaml.html#type-status_code">esaml:status_code()</a>, SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; #xmlElement{}</tt><br></p>
+</div><p>Return a LogoutResponse as an XML element</p>
+
+<h3 class="function"><a name="generate_metadata-1">generate_metadata/1</a></h3>
+<div class="spec">
+<p><tt>generate_metadata(SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; #xmlElement{}</tt><br></p>
+</div><p>Return the SP metadata as an XML element</p>
+
+<h3 class="function"><a name="setup-1">setup/1</a></h3>
+<div class="spec">
+<p><tt>setup(SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; <a href="esaml.html#type-sp">esaml:sp()</a></tt><br></p>
+</div><p>Initialize and validate an esaml_sp record</p>
+
+<h3 class="function"><a name="validate_assertion-2">validate_assertion/2</a></h3>
+<div class="spec">
+<p><tt>validate_assertion(Xml::#xmlElement{} | #xmlDocument{}, SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; {ok, Assertion::<a href="esaml.html#type-assertion">esaml:assertion()</a>} | {error, Reason::term()}</tt><br></p>
+</div><p>Validate and decode an assertion envelope in parsed XML</p>
+
+<h3 class="function"><a name="validate_assertion-3">validate_assertion/3</a></h3>
+<div class="spec">
+<p><tt>validate_assertion(Xml::#xmlElement{} | #xmlDocument{}, DuplicateFun::function(), SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; {ok, Assertion::<a href="esaml.html#type-assertion">esaml:assertion()</a>} | {error, Reason::term()}</tt><br></p>
+</div><p><p>Validate and decode an assertion envelope in parsed XML</p>
+ 
+  The DuplicateFun should have signature fun(#esaml_assertion{}, Digest :: binary()) -&gt;
+  ok | term(). It is intended to detect duplicate assertions in the case of a replay attack.</p>
+
+<h3 class="function"><a name="validate_logout_request-2">validate_logout_request/2</a></h3>
+<div class="spec">
+<p><tt>validate_logout_request(Xml::#xmlElement{} | #xmlDocument{}, SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; {ok, Request::<a href="esaml.html#type-logoutreq">esaml:logoutreq()</a>} | {error, Reason::term()}</tt><br></p>
+</div><p>Validate and parse a LogoutRequest element</p>
+
+<h3 class="function"><a name="validate_logout_response-2">validate_logout_response/2</a></h3>
+<div class="spec">
+<p><tt>validate_logout_response(Xml::#xmlElement{} | #xmlDocument{}, SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; {ok, Response::<a href="esaml.html#type-logoutresp">esaml:logoutresp()</a>} | {error, Reason::term()}</tt><br></p>
+</div><p>Validate and parse a LogoutResponse element</p>
+<hr>
+
+<div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jul 22 2014, 23:31:09.</i></p>
+</body>
+</html>

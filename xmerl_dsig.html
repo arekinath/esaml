@@ -1,0 +1,92 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Module xmerl_dsig</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<hr>
+
+<h1>Module xmerl_dsig</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>XML digital signatures for xmerl.
+
+
+<h2><a name="description">Description</a></h2><p>XML digital signatures for xmerl</p>
+ 
+  <p>Functions for performing XML digital signature generation and  
+verification, as specified at http://www.w3.org/TR/xmldsig-core/ .</p>
+ 
+  <p>These routines work on xmerl data structures (see the xmerl user guide  
+for details).</p>
+ 
+  Currently only RSA + SHA1 signatures are supported, in the typical
+  enveloped mode.
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-rsa_private_key">rsa_private_key()</a></h3>
+<p><tt>rsa_private_key() = #'RSAPrivateKey'{}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-xml_thing">xml_thing()</a></h3>
+<p><tt>xml_thing() = #xmlDocument{} | #xmlElement{} | #xmlAttribute{} | #xmlPI{} | #xmlText{} | #xmlComment{}</tt></p>
+
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#digest-1">digest/1</a></td><td>Returns the canonical SHA-1 digest of an (optionally signed) element.</td></tr>
+<tr><td valign="top"><a href="#sign-3">sign/3</a></td><td>Signs the given XML element by creating a ds:Signature element within it, returning       
+the element with the signature added.</td></tr>
+<tr><td valign="top"><a href="#strip-1">strip/1</a></td><td>Returns an xmlelement without any ds:Signature elements that are inside it.</td></tr>
+<tr><td valign="top"><a href="#verify-1">verify/1</a></td><td>Verifies an XML digital signature, trusting any valid certificate.</td></tr>
+<tr><td valign="top"><a href="#verify-2">verify/2</a></td><td>Verifies an XML digital signature on the given element.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="digest-1">digest/1</a></h3>
+<div class="spec">
+<p><tt>digest(Element::#xmlElement{}) -&gt; binary()</tt><br></p>
+</div><p><p>Returns the canonical SHA-1 digest of an (optionally signed) element</p>
+ 
+  Strips any XML digital signatures and applies any relevant InclusiveNamespaces
+  before generating the digest.</p>
+
+<h3 class="function"><a name="sign-3">sign/3</a></h3>
+<div class="spec">
+<p><tt>sign(Element::#xmlElement{}, PrivateKey::<a href="#type-rsa_private_key">rsa_private_key()</a>, CertBin::binary()) -&gt; #xmlElement{}</tt><br></p>
+</div><p><p>Signs the given XML element by creating a ds:Signature element within it, returning       
+the element with the signature added.</p>
+ 
+  Don't use "ds" as a namespace prefix in the envelope document, or things will go baaaad.</p>
+
+<h3 class="function"><a name="strip-1">strip/1</a></h3>
+<div class="spec">
+<p><tt>strip(Element::#xmlElement{} | #xmlDocument{}) -&gt; #xmlElement{}</tt><br></p>
+</div><p>Returns an xmlelement without any ds:Signature elements that are inside it.</p>
+
+<h3 class="function"><a name="verify-1">verify/1</a></h3>
+<div class="spec">
+<p><tt>verify(Element::<a href="#type-xml_thing">xml_thing()</a>) -&gt; ok | {error, bad_digest | bad_signature | cert_not_accepted}</tt><br></p>
+</div><p><p>Verifies an XML digital signature, trusting any valid certificate.</p>
+ 
+  This is really not recommended for production use, but it's handy in
+  testing/development.</p>
+
+<h3 class="function"><a name="verify-2">verify/2</a></h3>
+<div class="spec">
+<p><tt>verify(Element::#xmlElement{}, Fingerprints::[binary()] | any) -&gt; ok | {error, bad_digest | bad_signature | cert_not_accepted}</tt><br></p>
+</div><p><p>Verifies an XML digital signature on the given element.</p>
+ 
+  <p>Fingerprints is a list of valid cert fingerprints that can be  
+accepted.</p>
+ 
+  Will throw badmatch errors if you give it XML that is not signed
+  according to the xml-dsig spec. If you're using something other
+  than rsa+sha1 this will asplode. Don't say I didn't warn you.</p>
+<hr>
+
+<div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jul 22 2014, 23:31:09.</i></p>
+</body>
+</html>

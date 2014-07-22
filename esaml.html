@@ -1,0 +1,101 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>Module esaml</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<hr>
+
+<h1>Module esaml</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>SAML for Erlang.
+
+<p><b>Behaviours:</b> <a href="application.html"><tt>application</tt></a>, <a href="supervisor.html"><tt>supervisor</tt></a>.</p>
+
+<h2><a name="description">Description</a></h2>SAML for Erlang
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-assertion">assertion()</a></h3>
+<p><tt>assertion() = #esaml_assertion{version = string(), issue_instant = undefined | string(), recipient = undefined | string(), issuer = undefined | string(), subject = undefined | <a href="esaml.html#type-subject">esaml:subject()</a>, conditions = any(), attributes = any()}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-authnreq">authnreq()</a></h3>
+<p><tt>authnreq() = #esaml_authnreq{version = any(), issue_instant = undefined | string(), destination = undefined | string(), issuer = undefined | string(), consumer_location = undefined | string()}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-contact">contact()</a></h3>
+<p><tt>contact() = #esaml_contact{name = undefined | string(), email = undefined | string()}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-idp_metadata">idp_metadata()</a></h3>
+<p><tt>idp_metadata() = #esaml_idp_metadata{org = undefined | <a href="esaml.html#type-org">esaml:org()</a>, tech = undefined | <a href="esaml.html#type-contact">esaml:contact()</a>, signed_requests = undefined | boolean(), certificate = undefined | binary(), entity_id = undefined | string(), login_location = undefined | string(), logout_location = undefined | string(), name_format = <a href="esaml.html#type-name_format">esaml:name_format()</a>}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-localized_strings">localized_strings()</a></h3>
+<p><tt>localized_strings() = [{Locale::atom(), LocalizedString::string()}]</tt></p>
+
+
+<h3 class="typedecl"><a name="type-logout_reason">logout_reason()</a></h3>
+<p><tt>logout_reason() = user | admin</tt></p>
+
+
+<h3 class="typedecl"><a name="type-logoutreq">logoutreq()</a></h3>
+<p><tt>logoutreq() = #esaml_logoutreq{version = any(), issue_instant = undefined | string(), destination = undefined | string(), issuer = undefined | string(), name = undefined | string(), reason = undefined | <a href="esaml.html#type-logout_reason">esaml:logout_reason()</a>}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-logoutresp">logoutresp()</a></h3>
+<p><tt>logoutresp() = #esaml_logoutresp{version = any(), issue_instant = undefined | string(), destination = undefined | string(), issuer = undefined | string(), status = undefined | <a href="esaml.html#type-status_code">esaml:status_code()</a>}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-name_format">name_format()</a></h3>
+<p><tt>name_format() = email | x509 | windows | krb | persistent | transient | unknown</tt></p>
+
+
+<h3 class="typedecl"><a name="type-org">org()</a></h3>
+<p><tt>org() = #esaml_org{name = undefined | string() | <a href="esaml.html#type-localized_strings">esaml:localized_strings()</a>, displayname = undefined | string() | <a href="esaml.html#type-localized_strings">esaml:localized_strings()</a>, url = undefined | string() | <a href="esaml.html#type-localized_strings">esaml:localized_strings()</a>}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-response">response()</a></h3>
+<p><tt>response() = #esaml_response{version = string(), issue_instant = undefined | string(), destination = undefined | string(), issuer = undefined | string(), status = undefined | <a href="esaml.html#type-status_code">esaml:status_code()</a>, assertion = undefined | <a href="esaml.html#type-assertion">esaml:assertion()</a>}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-sp">sp()</a></h3>
+<p><tt>sp() = #esaml_sp{org = <a href="esaml.html#type-org">esaml:org()</a>, tech = <a href="esaml.html#type-contact">esaml:contact()</a>, key = undefined | binary(), certificate = undefined | binary(), sp_sign_requests = any(), idp_signs_assertions = any(), idp_signs_envelopes = any(), idp_signs_logout_requests = any(), sp_sign_metadata = any(), trusted_fingerprints = undefined | [string() | binary()], metadata_uri = undefined | string(), consume_uri = undefined | string(), logout_uri = undefined | string()}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-sp_metadata">sp_metadata()</a></h3>
+<p><tt>sp_metadata() = #esaml_sp_metadata{org = undefined | <a href="esaml.html#type-org">esaml:org()</a>, tech = undefined | <a href="esaml.html#type-contact">esaml:contact()</a>, signed_requests = undefined | boolean(), signed_assertions = undefined | boolean(), certificate = undefined | binary(), entity_id = undefined | string(), consumer_location = undefined | string(), logout_location = undefined | string()}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-status_code">status_code()</a></h3>
+<p><tt>status_code() = success | request_error | response_error | bad_version | authn_failed | bad_attr | denied | bad_binding</tt></p>
+
+
+<h3 class="typedecl"><a name="type-subject">subject()</a></h3>
+<p><tt>subject() = #esaml_subject{name = undefined | string(), confirmation_method = atom(), notonorafter = undefined | string()}</tt></p>
+
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#config-1">config/1</a></td><td>Retrieve a config record.</td></tr>
+<tr><td valign="top"><a href="#config-2">config/2</a></td><td>Retrieve a config record with default.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="config-1">config/1</a></h3>
+<div class="spec">
+<p><tt>config(Name::atom()) -&gt; term() | undefined</tt><br></p>
+</div><p>Retrieve a config record</p>
+
+<h3 class="function"><a name="config-2">config/2</a></h3>
+<div class="spec">
+<p><tt>config(Name::atom(), Default::term()) -&gt; term()</tt><br></p>
+</div><p>Retrieve a config record with default</p>
+<hr>
+
+<div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<p><i>Generated by EDoc, Jul 22 2014, 23:31:08.</i></p>
+</body>
+</html>

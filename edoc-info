@@ -1,0 +1,5 @@
+%% encoding: UTF-8
+{application,esaml}.
+{packages,[]}.
+{modules,[esaml,esaml_binding,esaml_cowboy,esaml_sp,esaml_util,xmerl_c14n,
+          xmerl_dsig]}.
