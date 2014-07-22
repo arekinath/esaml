@@ -37,7 +37,11 @@ decode_response(?deflate, SAMLResponse) ->
 	{Xml, _} = xmerl_scan:string(XmlData, [{namespace_conformant, true}]),
     Xml;
 decode_response(_, SAMLResponse) ->
-	XmlData = base64:decode_to_string(SAMLResponse),
+	Data = base64:decode(SAMLResponse),
+    XmlData = case (catch zlib:unzip(Data)) of
+        {'EXIT', _} -> binary_to_list(Data);
+        Bin -> binary_to_list(Bin)
+    end,
 	{Xml, _} = xmerl_scan:string(XmlData, [{namespace_conformant, true}]),
     Xml.
 

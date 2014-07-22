@@ -59,16 +59,16 @@ validate_logout(SP, Req) ->
             RelayState = proplists:get_value(<<"RelayState">>, PostVals, <<>>),
             validate_logout(SP, SAMLEncoding, SAMLResponse, RelayState, Req2);
         <<"GET">> ->
-            {SAMLEncoding, Req} = cowboy_req:qs_val(<<"SAMLEncoding">>, Req),
-            {SAMLResponse, Req} = case cowboy_req:qs_val(<<"SAMLResponse">>, Req) of
-                {undefined, Req} -> cowboy_req:qs_val(<<"SAMLRequest">>, Req);
+            {SAMLEncoding, Req2} = cowboy_req:qs_val(<<"SAMLEncoding">>, Req),
+            {SAMLResponse, Req2} = case cowboy_req:qs_val(<<"SAMLResponse">>, Req2) of
+                {undefined, Req2} -> cowboy_req:qs_val(<<"SAMLRequest">>, Req2);
                 Other -> Other
             end,
-            RelayState = case cowboy_req:qs_val(<<"RelayState">>, Req) of
-                {undefined, Req} -> <<>>;
-                {B, Req} -> B
+            RelayState = case cowboy_req:qs_val(<<"RelayState">>, Req2) of
+                {undefined, Req2} -> <<>>;
+                {B, Req2} -> B
             end,
-            validate_logout(SP, SAMLEncoding, SAMLResponse, RelayState, Req)
+            validate_logout(SP, SAMLEncoding, SAMLResponse, RelayState, Req2)
     end.
 
 validate_logout(SP, SAMLEncoding, SAMLResponse, RelayState, Req2) ->

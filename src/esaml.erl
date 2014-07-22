@@ -44,6 +44,8 @@ config(N, D) ->
 
 response_map_status_code(R = #esaml_response{status = Code}) ->
     R#esaml_response{status = status_code_map(Code)}.
+logoutresp_map_status_code(R = #esaml_logoutresp{status = Code}) ->
+    R#esaml_logoutresp{status = status_code_map(Code)}.
 logoutreq_map_reason(R = #esaml_logoutreq{reason = undefined}) ->
     R;
 logoutreq_map_reason(R = #esaml_logoutreq{reason = Urn}) ->
@@ -212,7 +214,7 @@ decode_logout_response(Xml) ->
         ?xpath_attr_required("/samlp:LogoutResponse/samlp:Status/samlp:StatusCode/@Value", esaml_logoutresp, status, bad_response),
         ?xpath_attr("/samlp:LogoutResponse/@Destination", esaml_logoutresp, destination),
         ?xpath_text("/samlp:LogoutResponse/saml:Issuer/text()", esaml_logoutresp, issuer),
-        fun response_map_status_code/1
+        fun logoutresp_map_status_code/1
     ], #esaml_logoutresp{}).
 
 decode_response(Xml) ->

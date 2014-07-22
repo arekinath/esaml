@@ -131,7 +131,8 @@ validate_logout_request(Xml, SP = #esaml_sp{}) ->
 -spec validate_logout_response(Xml :: #xmlElement{} | #xmlDocument{}, #esaml_sp{}) -> {ok, Response :: #esaml_logoutresp{}} | {error, Reason :: term()}.
 validate_logout_response(Xml, SP = #esaml_sp{}) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
-          {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
+          {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'},
+          {"ds", 'http://www.w3.org/2000/09/xmldsig#'}],
     esaml_util:threaduntil([
         fun(X) ->
             case xmerl_xpath:string("/samlp:LogoutResponse", X, [{namespace, Ns}]) of
@@ -140,12 +141,14 @@ validate_logout_response(Xml, SP = #esaml_sp{}) ->
             end
         end,
         fun(X) ->
-            if SP#esaml_sp.idp_signs_envelopes ->
-                case xmerl_dsig:verify(X, SP#esaml_sp.trusted_fingerprints) of
-                    ok -> X;
-                    OuterError -> {error, OuterError}
-                end;
-            true -> {error, cannot_validate}
+            % Signature is optional on the logout_response. Verify it if we have it.
+            case xmerl_xpath:string("/samlp:LogoutResponse/ds:Signature", X, [{namespace, Ns}]) of
+                [#xmlElement{}] ->
+                    case xmerl_dsig:verify(X, SP#esaml_sp.trusted_fingerprints) of
+                        ok -> X;
+                        OuterError -> {error, OuterError}
+                    end;
+                _ -> X
             end
         end,
         fun(X) ->
