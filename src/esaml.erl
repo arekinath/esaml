@@ -44,6 +44,10 @@ config(N, D) ->
 
 response_map_status_code(R = #esaml_response{status = Code}) ->
     R#esaml_response{status = status_code_map(Code)}.
+logoutreq_map_reason(R = #esaml_logoutreq{reason = undefined}) ->
+    R;
+logoutreq_map_reason(R = #esaml_logoutreq{reason = Urn}) ->
+    R#esaml_logoutreq{reason = logout_reason_map(Urn)}.
 subject_map_method(R = #esaml_subject{confirmation_method = Method}) ->
     R#esaml_subject{confirmation_method = subject_method_map(Method)}.
 
@@ -66,6 +70,14 @@ rev_status_code_map(bad_attr) -> "urn:oasis:names:tc:SAML:2.0:status:InvalidAttr
 rev_status_code_map(denied) -> "urn:oasis:names:tc:SAML:2.0:status:RequestDenied";
 rev_status_code_map(bad_binding) -> "urn:oasis:names:tc:SAML:2.0:status:UnsupportedBinding";
 rev_status_code_map(_) -> error(bad_status_code).
+
+logout_reason_map("urn:oasis:names:tc:SAML:2.0:logout:user") -> user;
+logout_reason_map("urn:oasis:names:tc:SAML:2.0:logout:admin") -> admin;
+logout_reason_map(_) -> unknown.
+
+rev_logout_reason_map(user) -> "urn:oasis:names:tc:SAML:2.0:logout:user";
+rev_logout_reason_map(admin) -> "urn:oasis:names:tc:SAML:2.0:logout:admin";
+rev_logout_reason_map(_) -> error(bad_reason).
 
 common_attrib_map("urn:oid:2.16.840.1.113730.3.1.3") -> employeeNumber;
 common_attrib_map("urn:oid:1.3.6.1.4.1.5923.1.1.1.6") -> eduPersonPrincipalName;
@@ -132,6 +144,8 @@ decode_logout_request(Xml) ->
         ?xpath_attr_required("/samlp:LogoutRequest/@IssueInstant", esaml_logoutreq, issue_instant, bad_response),
         ?xpath_text_required("/samlp:LogoutRequest/saml:NameID/text()", esaml_logoutreq, name, bad_name),
         ?xpath_attr("/samlp:LogoutRequest/@Destination", esaml_logoutreq, destination),
+        ?xpath_attr("/samlp:LogoutRequest/@Reason", esaml_logoutreq, reason),
+        fun logoutreq_map_reason/1,
         ?xpath_text("/samlp:LogoutRequest/saml:Issuer/text()", esaml_logoutreq, issuer)
     ], #esaml_logoutreq{}).
 
@@ -317,7 +331,8 @@ to_xml(#esaml_authnreq{version = V, issue_instant = Time, destination = Dest, is
         ]
     });
 
-to_xml(#esaml_logoutreq{version = V, issue_instant = Time, destination = Dest, issuer = Issuer, name = NameID}) ->
+to_xml(#esaml_logoutreq{version = V, issue_instant = Time, destination = Dest, issuer = Issuer,
+                        name = NameID, reason = Reason}) ->
     Ns = #xmlNamespace{nodes = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
                                 {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
     esaml_util:build_nsinfo(Ns, #xmlElement{name = 'samlp:LogoutRequest',
@@ -326,7 +341,8 @@ to_xml(#esaml_logoutreq{version = V, issue_instant = Time, destination = Dest, i
                       #xmlAttribute{name = 'IssueInstant', value = Time},
                       #xmlAttribute{name = 'Version', value = V},
                       #xmlAttribute{name = 'Destination', value = Dest},
-                      #xmlAttribute{name = 'ProtocolBinding', value = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"}],
+                      #xmlAttribute{name = 'ProtocolBinding', value = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"},
+                      #xmlAttribute{name = 'Reason', value = rev_logout_reason_map(Reason)}],
         content = [
             #xmlElement{name = 'saml:Issuer', content = [#xmlText{value = Issuer}]},
             #xmlElement{name = 'saml:NameID', content = [#xmlText{value = NameID}]}

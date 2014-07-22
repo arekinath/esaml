@@ -13,6 +13,7 @@
 
 -export([setup/1, generate_authn_request/2, generate_metadata/1]).
 -export([validate_assertion/2, validate_assertion/3]).
+-export([generate_logout_request/3, generate_logout_response/3]).
 
 %% @doc Return an AuthnRequest as an XML element
 -spec generate_authn_request(IdpURL :: string(), #esaml_sp{}) -> #xmlElement{}.
@@ -28,6 +29,38 @@ generate_authn_request(IdpURL, SP = #esaml_sp{metadata_uri = MetaURI, consume_ur
         xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
     true ->
         Xml
+    end.
+
+%% @doc Return a LogoutRequest as an XML element
+-spec generate_logout_request(IdpURL :: string(), NameID :: string(), #esaml_sp{}) -> #xmlElement{}.
+generate_logout_request(IdpURL, NameID, SP = #esaml_sp{metadata_uri = MetaURI}) ->
+    Now = erlang:localtime_to_universaltime(erlang:localtime()),
+    Stamp = esaml_util:datetime_to_saml(Now),
+
+    Xml = esaml:to_xml(#esaml_logoutreq{issue_instant = Stamp,
+                                       destination = IdpURL,
+                                       issuer = MetaURI,
+                                       name = NameID,
+                                       reason = user}),
+    if SP#esaml_sp.sp_sign_requests ->
+        xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
+    true ->
+        error("logout requests must be signed")
+    end.
+
+-spec generate_logout_response(IdpUR :: string(), Status :: esaml_status_code(), #esaml_sp{}) -> #xmlElement{}.
+generate_logout_response(IdpURL, Status, SP = #esaml_sp{metadata_uri = MetaURI}) ->
+    Now = erlang:localtime_to_universaltime(erlang:localtime()),
+    Stamp = esaml_util:datetime_to_saml(Now),
+
+    Xml = esaml:to_xml(#esaml_logoutresp{issue_instant = Stamp,
+                                       destination = IdpURL,
+                                       issuer = MetaURI,
+                                       status = Status}),
+    if SP#esaml_sp.sp_sign_requests ->
+        xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
+    true ->
+        error("logout responses must be signed")
     end.
 
 %% @doc Return the SP metadata as an XML element

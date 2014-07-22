@@ -31,8 +31,10 @@
 	recipient :: string(), issuer :: string(), subject :: #esaml_subject{},
 	conditions = [], attributes = []}).
 
+-type esaml_logout_reason() :: user | admin.
 -record(esaml_logoutreq, {version = "2.0", issue_instant :: string(),
-	destination :: string(), issuer :: string(), name :: string()}).
+	destination :: string(), issuer :: string(), name :: string(),
+	reason :: esaml_logout_reason()}).
 
 -record(esaml_logoutresp, {version = "2.0", issue_instant :: string(),
 	destination :: string(), issuer :: string(), status :: esaml_status_code()}).
