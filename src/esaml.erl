@@ -170,6 +170,13 @@ common_attrib_map(Other) -> list_to_atom(Other).
             _ -> {error, Error}
         end
     end).
+-define(xpath_binary(XPath, Record, Field),
+    fun(Resp) ->
+        case xmerl_xpath:string(XPath, Xml, [{namespace, Ns}]) of
+            [#xmlText{value = V}] -> Resp#Record{Field = base64:decode(list_to_binary(V))};
+            _ -> Resp
+        end
+    end).
 -define(xpath_recurse(XPath, Record, Field, F),
     fun(Resp) ->
         case xmerl_xpath:string(XPath, Xml, [{namespace, Ns}]) of
@@ -188,7 +195,8 @@ common_attrib_map(Other) -> list_to_atom(Other).
 decode_idp_metadata(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'},
-          {"md", 'urn:oasis:names:tc:SAML:2.0:metadata'}],
+          {"md", 'urn:oasis:names:tc:SAML:2.0:metadata'},
+          {"ds", 'http://www.w3.org/2000/09/xmldsig#'}],
     esaml_util:threaduntil([
         ?xpath_attr_required("/md:EntityDescriptor/@entityID", esaml_idp_metadata, entity_id, bad_entity),
         ?xpath_attr_required("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleSignOnService/@Location",
@@ -198,6 +206,7 @@ decode_idp_metadata(Xml) ->
         ?xpath_text("/md:EntityDescriptor/md:IDPSSODescriptor/md:NameIDFormat/text()",
             esaml_idp_metadata, name_format),
         fun idpmeta_map_nameid/1,
+        ?xpath_binary("/md:EntityDescriptor/md:IDPSSODescriptor/md:KeyDescriptor[@use='signing']/ds:KeyInfo/ds:X509Data/ds:X509Certificate/text()", esaml_idp_metadata, certificate),
         ?xpath_recurse("/md:EntityDescriptor/md:ContactPerson[@contactType='technical']", esaml_idp_metadata, tech, decode_contact),
         ?xpath_recurse("/md:EntityDescriptor/md:Organization", esaml_idp_metadata, org, decode_org)
     ], #esaml_idp_metadata{}).
@@ -384,7 +393,7 @@ check_stale(A) ->
 
 %% @doc Parse and validate an assertion, returning it as a record
 %% @private
--spec validate_assertion(AssertionXml :: #xmlElement{}, Recipient :: string(), Audience :: string()) -> 
+-spec validate_assertion(AssertionXml :: #xmlElement{}, Recipient :: string(), Audience :: string()) ->
         {ok, #esaml_assertion{}} | {error, Reason :: term()}.
 validate_assertion(AssertionXml, Recipient, Audience) ->
     case decode_assertion(AssertionXml) of
