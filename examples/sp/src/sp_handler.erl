@@ -11,7 +11,7 @@
 -record(state, {sp, idp}).
 
 init(_Transport, Req, Args) ->
-	% Load the certificate and private key for the SP
+    % Load the certificate and private key for the SP
     PrivKey = esaml_util:load_private_key("test.key"),
     Cert = esaml_util:load_certificate("test.crt"),
     % We build all of our URLs (in metadata, and in requests) based on this
@@ -54,13 +54,13 @@ handle(<<"GET">>, <<"metadata">>, Req, S = #state{sp = SP}) ->
 % Visit /saml/auth to start the authentication process -- we will make an AuthnRequest
 % and send it to our IDP
 handle(<<"GET">>, <<"auth">>, Req, S = #state{sp = SP,
-		idp = #esaml_idp_metadata{login_location = IDP}}) ->
+        idp = #esaml_idp_metadata{login_location = IDP}}) ->
     {ok, Req2} = esaml_cowboy:reply_with_authnreq(SP, IDP, <<"foo">>, Req),
     {ok, Req2, S};
 
 % Handles HTTP-POST bound assertions coming back from the IDP.
 handle(<<"POST">>, <<"consume">>, Req, S = #state{sp = SP,
-		idp = #esaml_idp_metadata{login_location = IDP}}) ->
+        idp = #esaml_idp_metadata{login_location = IDP}}) ->
     case esaml_cowboy:validate_assertion(SP, fun esaml_util:check_dupe_ets/2, Req) of
         {ok, Assertion, RelayState, Req2} ->
             Attrs = Assertion#esaml_assertion.attributes,

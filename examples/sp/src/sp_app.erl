@@ -14,15 +14,15 @@
 -export([stop/1]).
 
 start(_Type, _Args) ->
-	Dispatch = cowboy_router:compile([
-		{'_', [
-			{"/saml/:operation", sp_handler, []}
-		]}
-	]),
-	{ok, _} = cowboy:start_http(http, 100, [{port, 8080}], [
-		{env, [{dispatch, Dispatch}]}
-	]),
-	sp_sup:start_link().
+    Dispatch = cowboy_router:compile([
+        {'_', [
+            {"/saml/:operation", sp_handler, []}
+        ]}
+    ]),
+    {ok, _} = cowboy:start_http(http, 100, [{port, 8080}], [
+        {env, [{dispatch, Dispatch}]}
+    ]),
+    sp_sup:start_link().
 
 stop(_State) ->
-	ok.
+    ok.
