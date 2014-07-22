@@ -7,10 +7,12 @@
 %% the LICENSE file in the root of the distribution.
 
 -module(sp_handler).
+-include_lib("esaml/include/esaml.hrl").
 
 -record(state, {sp, idp}).
+-export([init/3, handle/2, terminate/3]).
 
-init(_Transport, Req, Args) ->
+init(_Transport, Req, _Args) ->
     % Load the certificate and private key for the SP
     PrivKey = esaml_util:load_private_key("test.key"),
     Cert = esaml_util:load_certificate("test.crt"),
@@ -59,8 +61,7 @@ handle(<<"GET">>, <<"auth">>, Req, S = #state{sp = SP,
     {ok, Req2, S};
 
 % Handles HTTP-POST bound assertions coming back from the IDP.
-handle(<<"POST">>, <<"consume">>, Req, S = #state{sp = SP,
-        idp = #esaml_idp_metadata{login_location = IDP}}) ->
+handle(<<"POST">>, <<"consume">>, Req, S = #state{sp = SP}) ->
     case esaml_cowboy:validate_assertion(SP, fun esaml_util:check_dupe_ets/2, Req) of
         {ok, Assertion, RelayState, Req2} ->
             Attrs = Assertion#esaml_assertion.attributes,
