@@ -18,9 +18,10 @@
 	signed_assertions :: boolean(),
 	certificate :: binary(),
 	entity_id :: string(),
-	consumer_location :: string()}).
+	consumer_location :: string(),
+	logout_location :: string()}).
 
--record(esaml_authnreq, {issue_instant :: string(),
+-record(esaml_authnreq, {version = "2.0", issue_instant :: string(),
 	destination :: string(), issuer :: string(), consumer_location :: string()}).
 
 -record(esaml_subject, {name :: string(),
@@ -29,6 +30,12 @@
 -record(esaml_assertion, {version = "2.0" :: string(), issue_instant :: string(),
 	recipient :: string(), issuer :: string(), subject :: #esaml_subject{},
 	conditions = [], attributes = []}).
+
+-record(esaml_logoutreq, {version = "2.0", issue_instant :: string(),
+	destination :: string(), issuer :: string(), name :: string()}).
+
+-record(esaml_logoutresp, {version = "2.0", issue_instant :: string(),
+	destination :: string(), issuer :: string(), status :: esaml_status_code()}).
 
 -type esaml_status_code() :: success | request_error | response_error | bad_version | authn_failed | bad_attr | denied | bad_binding.
 -record(esaml_response, {version = "2.0" :: string(), issue_instant :: string(),
@@ -43,4 +50,4 @@
 	key :: binary(), certificate :: binary(),
 	sp_sign_requests = false, idp_signs_assertions = true, idp_signs_envelopes = true,
 	sp_sign_metadata = false, trusted_fingerprints :: [string() | binary()],
-	metadata_uri :: string(), consume_uri :: string()}).
+	metadata_uri :: string(), consume_uri :: string(), logout_uri :: string()}).

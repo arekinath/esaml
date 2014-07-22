@@ -17,6 +17,7 @@
 -export([start/2, stop/1, init/1]).
 -export([stale_time/1]).
 -export([config/2, config/1, to_xml/1, decode_response/1, decode_assertion/1, validate_assertion/3]).
+-export([decode_logout_request/1, decode_logout_response/1]).
 
 start(_StartType, _StartArgs) ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
@@ -58,6 +59,14 @@ status_code_map("urn:oasis:names:tc:SAML:2.0:status:UnsupportedBinding") -> bad_
 status_code_map(Urn = "urn:" ++ _) -> list_to_atom(lists:last(string:tokens(Urn, ":")));
 status_code_map(_) -> unknown.
 
+rev_status_code_map(success) -> "urn:oasis:names:tc:SAML:2.0:status:Success";
+rev_status_code_map(bad_version) -> "urn:oasis:names:tc:SAML:2.0:status:VersionMismatch";
+rev_status_code_map(authn_failed) -> "urn:oasis:names:tc:SAML:2.0:status:AuthnFailed";
+rev_status_code_map(bad_attr) -> "urn:oasis:names:tc:SAML:2.0:status:InvalidAttrNameOrValue";
+rev_status_code_map(denied) -> "urn:oasis:names:tc:SAML:2.0:status:RequestDenied";
+rev_status_code_map(bad_binding) -> "urn:oasis:names:tc:SAML:2.0:status:UnsupportedBinding";
+rev_status_code_map(_) -> error(bad_status_code).
+
 common_attrib_map("urn:oid:2.16.840.1.113730.3.1.3") -> employeeNumber;
 common_attrib_map("urn:oid:1.3.6.1.4.1.5923.1.1.1.6") -> eduPersonPrincipalName;
 common_attrib_map("urn:oid:0.9.2342.19200300.100.1.3") -> mail;
@@ -95,6 +104,13 @@ common_attrib_map(Other) -> list_to_atom(Other).
             _ -> Resp
         end
     end).
+-define(xpath_text_required(XPath, Record, Field, Error),
+    fun(Resp) ->
+        case xmerl_xpath:string(XPath, Xml, [{namespace, Ns}]) of
+            [#xmlText{value = V}] -> Resp#Record{Field = V};
+            _ -> {error, Error}
+        end
+    end).
 -define(xpath_recurse(XPath, Record, Field, F),
     fun(Resp) ->
         case xmerl_xpath:string(XPath, Xml, [{namespace, Ns}]) of
@@ -107,6 +123,29 @@ common_attrib_map(Other) -> list_to_atom(Other).
             _ -> Resp
         end
     end).
+
+decode_logout_request(Xml) ->
+    Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
+          {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
+    esaml_util:threaduntil([
+        ?xpath_attr_required("/samlp:LogoutRequest/@Version", esaml_logoutreq, version, bad_version),
+        ?xpath_attr_required("/samlp:LogoutRequest/@IssueInstant", esaml_logoutreq, issue_instant, bad_response),
+        ?xpath_text_required("/samlp:LogoutRequest/saml:NameID/text()", esaml_logoutreq, name, bad_name),
+        ?xpath_attr("/samlp:LogoutRequest/@Destination", esaml_logoutreq, destination),
+        ?xpath_text("/samlp:LogoutRequest/saml:Issuer/text()", esaml_logoutreq, issuer)
+    ], #esaml_logoutreq{}).
+
+decode_logout_response(Xml) ->
+    Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
+          {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
+    esaml_util:threaduntil([
+        ?xpath_attr_required("/samlp:LogoutResponse/@Version", esaml_logoutresp, version, bad_version),
+        ?xpath_attr_required("/samlp:LogoutResponse/@IssueInstant", esaml_logoutresp, issue_instant, bad_response),
+        ?xpath_attr_required("/samlp:LogoutResponse/samlp:Status/samlp:StatusCode/@Value", esaml_logoutresp, status, bad_response),
+        ?xpath_attr("/samlp:LogoutResponse/@Destination", esaml_logoutresp, destination),
+        ?xpath_text("/samlp:LogoutResponse/saml:Issuer/text()", esaml_logoutresp, issuer),
+        fun response_map_status_code/1
+    ], #esaml_logoutresp{}).
 
 decode_response(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
@@ -258,7 +297,7 @@ validate_assertion(AssertionXml, Recipient, Audience) ->
     end.
 
 %% @doc Convert a SAML request/metadata record into XML
-to_xml(#esaml_authnreq{issue_instant = Time, destination = Dest, issuer = Issuer, consumer_location = Consumer}) ->
+to_xml(#esaml_authnreq{version = V, issue_instant = Time, destination = Dest, issuer = Issuer, consumer_location = Consumer}) ->
     Ns = #xmlNamespace{nodes = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
                                 {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
 
@@ -266,7 +305,7 @@ to_xml(#esaml_authnreq{issue_instant = Time, destination = Dest, issuer = Issuer
         attributes = [#xmlAttribute{name = 'xmlns:samlp', value = proplists:get_value("samlp", Ns#xmlNamespace.nodes)},
                       #xmlAttribute{name = 'xmlns:saml', value = proplists:get_value("saml", Ns#xmlNamespace.nodes)},
                       #xmlAttribute{name = 'IssueInstant', value = Time},
-                      #xmlAttribute{name = 'Version', value = "2.0"},
+                      #xmlAttribute{name = 'Version', value = V},
                       #xmlAttribute{name = 'Destination', value = Dest},
                       #xmlAttribute{name = 'AssertionConsumerServiceURL', value = Consumer},
                       #xmlAttribute{name = 'ProtocolBinding', value = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"}],
@@ -278,12 +317,48 @@ to_xml(#esaml_authnreq{issue_instant = Time, destination = Dest, issuer = Issuer
         ]
     });
 
+to_xml(#esaml_logoutreq{version = V, issue_instant = Time, destination = Dest, issuer = Issuer, name = NameID}) ->
+    Ns = #xmlNamespace{nodes = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
+                                {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
+    esaml_util:build_nsinfo(Ns, #xmlElement{name = 'samlp:LogoutRequest',
+        attributes = [#xmlAttribute{name = 'xmlns:samlp', value = proplists:get_value("samlp", Ns#xmlNamespace.nodes)},
+                      #xmlAttribute{name = 'xmlns:saml', value = proplists:get_value("saml", Ns#xmlNamespace.nodes)},
+                      #xmlAttribute{name = 'IssueInstant', value = Time},
+                      #xmlAttribute{name = 'Version', value = V},
+                      #xmlAttribute{name = 'Destination', value = Dest},
+                      #xmlAttribute{name = 'ProtocolBinding', value = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"}],
+        content = [
+            #xmlElement{name = 'saml:Issuer', content = [#xmlText{value = Issuer}]},
+            #xmlElement{name = 'saml:NameID', content = [#xmlText{value = NameID}]}
+        ]
+    });
+
+to_xml(#esaml_logoutresp{version = V, issue_instant  = Time,
+    destination = Dest, issuer = Issuer, status = Status}) ->
+    Ns = #xmlNamespace{nodes = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
+                                {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
+    esaml_util:build_nsinfo(Ns, #xmlElement{name = 'samlp:LogoutResponse',
+        attributes = [#xmlAttribute{name = 'xmlns:samlp', value = proplists:get_value("samlp", Ns#xmlNamespace.nodes)},
+                      #xmlAttribute{name = 'xmlns:saml', value = proplists:get_value("saml", Ns#xmlNamespace.nodes)},
+                      #xmlAttribute{name = 'IssueInstant', value = Time},
+                      #xmlAttribute{name = 'Version', value = V},
+                      #xmlAttribute{name = 'Destination', value = Dest},
+                      #xmlAttribute{name = 'ProtocolBinding', value = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"}],
+        content = [
+            #xmlElement{name = 'saml:Issuer', content = [#xmlText{value = Issuer}]},
+            #xmlElement{name = 'samlp:Status', content = [
+                    #xmlElement{name = 'samlp:StatusCode', content = [
+                        #xmlText{value = rev_status_code_map(Status)}]}]}
+        ]
+    });
+
 to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisplayName,
                                            url = OrgUrl },
                        tech = #esaml_contact{name = TechName, email = TechEmail},
                        signed_requests = SignReq, signed_assertions = SignAss,
                        certificate = CertBin, entity_id = EntityID,
-                       consumer_location = ConsumerLoc
+                       consumer_location = ConsumerLoc,
+                       logout_location = SLOLoc
                        }) ->
     Ns = #xmlNamespace{nodes = [{"md", 'urn:oasis:names:tc:SAML:2.0:metadata'},
                                 {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'},
@@ -324,7 +399,12 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
             #xmlElement{name = 'md:AttributeConsumingService',
                 attributes = [#xmlAttribute{name = 'isDefault', value = "true"},
                               #xmlAttribute{name = 'index', value = "0"}],
-                content = [#xmlElement{name = 'md:ServiceName', content = [#xmlText{value = "SAML SP"}]}]}
+                content = [#xmlElement{name = 'md:ServiceName', content = [#xmlText{value = "SAML SP"}]}]},
+            #xmlElement{name = 'md:SingleLogoutService',
+                attributes = [#xmlAttribute{name = isDefault, value = "true"},
+                              #xmlAttribute{name = index, value = "0"},
+                              #xmlAttribute{name = 'Binding', value = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"},
+                              #xmlAttribute{name = 'Location', value = SLOLoc}]}
         ]
     },
 
