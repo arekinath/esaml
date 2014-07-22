@@ -6,6 +6,7 @@
 %% Distributed subject to the terms of the 2-clause BSD license, see
 %% the LICENSE file in the root of the distribution.
 
+%% @doc Utility functions
 -module(esaml_util).
 
 -include_lib("xmerl/include/xmerl.hrl").
@@ -40,6 +41,9 @@ datetime_to_saml(Time) ->
     {{Y,Mo,D}, {H, Mi, S}} = Time,
     lists:flatten(io_lib:format("~4.10.0B-~2.10.0B-~2.10.0BT~2.10.0B:~2.10.0B:~2.10.0BZ", [Y, Mo, D, H, Mi, S])).
 
+%% @doc Converts a SAML time string into a calendar:datetime()
+%%
+%% Inverse of datetime_to_saml/1
 -spec saml_to_datetime(Stamp :: binary() | string()) -> calendar:datetime().
 saml_to_datetime(Stamp) ->
     StampBin = if is_list(Stamp) -> list_to_binary(Stamp); true -> Stamp end,
@@ -50,6 +54,7 @@ saml_to_datetime(Stamp) ->
     F = fun(B) -> list_to_integer(binary_to_list(B)) end,
     {{F(YBin), F(MoBin), F(DBin)}, {F(HBin), F(MiBin), F(SBin)}}.
 
+%% @private
 -spec folduntil(F :: fun(), Acc :: term(), List :: []) -> AccOut :: term().
 folduntil(_F, Acc, []) -> Acc;
 folduntil(F, Acc, [Next | Rest]) ->
@@ -58,10 +63,12 @@ folduntil(F, Acc, [Next | Rest]) ->
         NextAcc -> folduntil(F, NextAcc, Rest)
     end.
 
+%% @private
 thread([], Acc) -> Acc;
 thread([F | Rest], Acc) ->
     thread(Rest, F(Acc)).
 
+%% @private
 threaduntil([], Acc) -> {ok, Acc};
 threaduntil([F | Rest], Acc) ->
     case (catch F(Acc)) of
@@ -75,7 +82,7 @@ threaduntil([F | Rest], Acc) ->
             threaduntil(Rest, NextAcc)
     end.
 
-%% @internal
+%% @private
 -spec build_nsinfo(#xmlNamespace{}, #xmlElement{}) -> #xmlElement{}.
 build_nsinfo(Ns, Attr = #xmlAttribute{name = Name}) ->
     case string:tokens(atom_to_list(Name), ":") of
@@ -91,7 +98,7 @@ build_nsinfo(Ns, Elem = #xmlElement{name = Name, content = Kids, attributes = At
                     content = [build_nsinfo(Ns, Kid) || Kid <- Kids]};
 build_nsinfo(_Ns, Other) -> Other.
 
-%% @internal
+%% @private
 start_ets() ->
     {ok, spawn_link(fun() ->
         register(esaml_ets_table_owner, self()),
@@ -102,6 +109,7 @@ start_ets() ->
         ets_table_owner()
     end)}.
 
+%% @private
 ets_table_owner() ->
     receive
         stop -> ok;
@@ -137,7 +145,7 @@ load_certificate(CertPath) ->
             CertBin
     end.
 
-%% @doc Reads IDP metadata from a URL (or ETS memory cache)
+%% @doc Reads IDP metadata from a URL (or ETS memory cache) and validates the signature
 -spec load_metadata(Url :: string(), Fingerprints :: [string() | binary()]) -> #esaml_idp_metadata{}.
 load_metadata(Url, FPs) ->
     Fingerprints = convert_fingerprints(FPs),
@@ -154,6 +162,8 @@ load_metadata(Url, FPs) ->
             ets:insert(esaml_idp_meta_cache, {Url, Meta}),
             Meta
     end.
+
+%% @doc Reads IDP metadata from a URL (or ETS memory cache)
 -spec load_metadata(Url :: string()) -> #esaml_idp_metadata{}.
 load_metadata(Url) ->
     case ets:lookup(esaml_idp_meta_cache, Url) of
@@ -168,8 +178,9 @@ load_metadata(Url) ->
 
 %% @doc Checks for a duplicate assertion using ETS tables in memory on all available nodes.
 %%
-%% This is a helper to be used from an esaml_sp implementation. If you aren't using
-%% standard erlang distribution for your app, you probably don't want to use this.
+%% This is a helper to be used as a DuplicateFun with esaml_sp:validate_assertion/3. 
+%% If you aren't using standard erlang distribution for your app, you probably don't 
+%% want to use this.
 -spec check_dupe_ets(Assertion :: #esaml_assertion{}, Digest :: binary()) -> ok | {error, duplicate_assertion}.
 check_dupe_ets(A, Digest) ->
     Now = erlang:localtime_to_universaltime(erlang:localtime()),

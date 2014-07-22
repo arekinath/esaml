@@ -6,6 +6,7 @@
 %% Distributed subject to the terms of the 2-clause BSD license, see
 %% the LICENSE file in the root of the distribution.
 
+%% @doc SAML HTTP binding handlers
 -module(esaml_binding).
 
 -export([decode_response/2, encode_http_redirect/3, encode_http_post/3]).
@@ -16,6 +17,7 @@
 -type uri() :: binary().
 -type html_doc() :: binary().
 
+%% @private
 xml_payload_type(Xml) ->
     case Xml of
         #xmlDocument{content = [#xmlElement{name = Atom}]} ->
@@ -31,6 +33,7 @@ xml_payload_type(Xml) ->
         _ -> "SAMLRequest"
     end.
 
+%% @doc Unpack and parse a SAMLResponse with given encoding
 -spec decode_response(SAMLEncoding :: binary(), SAMLResponse :: binary()) -> #xmlDocument{}.
 decode_response(?deflate, SAMLResponse) ->
 	XmlData = binary_to_list(zlib:unzip(base64:decode(SAMLResponse))),
@@ -45,6 +48,9 @@ decode_response(_, SAMLResponse) ->
 	{Xml, _} = xmerl_scan:string(XmlData, [{namespace_conformant, true}]),
     Xml.
 
+%% @doc Encode a SAMLRequest (or SAMLResponse) as an HTTP-REDIRECT binding
+%%
+%% Returns the URI that should be the target of redirection.
 -spec encode_http_redirect(IDPTarget :: uri(), SignedXml :: #xmlDocument{}, RelayState :: binary()) -> uri().
 encode_http_redirect(IdpTarget, SignedXml, RelayState) ->
     Type = xml_payload_type(SignedXml),
@@ -53,6 +59,10 @@ encode_http_redirect(IdpTarget, SignedXml, RelayState) ->
     RelayStateEsc = edoc_lib:escape_uri(binary_to_list(RelayState)),
     iolist_to_binary([IdpTarget, "?SAMLEncoding=", ?deflate, "&", Type, "=", Param, "&RelayState=", RelayStateEsc]).
 
+%% @doc Encode a SAMLRequest (or SAMLResponse) as an HTTP-POST binding
+%%
+%% Returns the HTML document to be sent to the browser, containing a
+%% form and javascript to automatically submit it.
 -spec encode_http_post(IDPTarget :: uri(), SignedXml :: #xmlDocument{}, RelayState :: binary()) -> html_doc().
 encode_http_post(IdpTarget, SignedXml, RelayState) ->
     Type = xml_payload_type(SignedXml),

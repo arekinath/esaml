@@ -8,6 +8,16 @@
 %% Distributed subject to the terms of the 2-clause BSD license, see
 %% the LICENSE file in the root of the distribution.
 
+%% @doc XML digital signatures for xmerl
+%%
+%% Functions for performing XML digital signature generation and
+%% verification, as specified at http://www.w3.org/TR/xmldsig-core/ .
+%%
+%% These routines work on xmerl data structures (see the xmerl user guide
+%% for details).
+%%
+%% Currently only RSA + SHA1 signatures are supported, in the typical
+%% enveloped mode.
 -module(xmerl_dsig).
 
 -export([verify/1, verify/2, sign/3, strip/1, digest/1]).

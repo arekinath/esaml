@@ -6,6 +6,13 @@
 %% Distributed subject to the terms of the 2-clause BSD license, see
 %% the LICENSE file in the root of the distribution.
 
+%% @doc XML canonocialisation for xmerl
+%%
+%% Functions for performing XML canonicalisation (C14n), as specified
+%% at http://www.w3.org/TR/xml-c14n .
+%%
+%% These routines work on xmerl data structures (see the xmerl user guide
+%% for details).
 -module(xmerl_c14n).
 
 -export([c14n/3, c14n/2, c14n/1, xml_safe_string/2, xml_safe_string/1, canon_name/1]).
@@ -14,7 +21,7 @@
 -include_lib("public_key/include/public_key.hrl").
 
 %% @doc Returns the canonical namespace-URI-prefix-resolved version of an XML name.
-%% @internal
+%% @private
 -spec canon_name(Prefix :: string(), Name :: string() | atom(), Nsp :: #xmlNamespace{}) -> string().
 canon_name(Ns, Name, Nsp) ->
     NsPartRaw = case Ns of
@@ -32,7 +39,7 @@ canon_name(Ns, Name, Nsp) ->
     lists:flatten([NsPart | NamePart]).
 
 %% @doc Returns the canonical URI name of an XML element or attribute.
-%% @internal
+%% @private
 -spec canon_name(#xmlElement{} | #xmlAttribute{}) -> string().
 canon_name(#xmlAttribute{name = Name, nsinfo = Exp, namespace = Nsp}) ->
     case Exp of
@@ -60,7 +67,7 @@ attr_lte(AttrA, AttrB) ->
     end.
 
 %% @doc Cleans out all namespace definitions from an attribute list and returns it sorted.
-%% @internal
+%% @private
 -spec clean_sort_attrs(Attrs :: [#xmlAttribute{}]) -> [#xmlAttribute{}].
 clean_sort_attrs(Attrs) ->
     lists:sort(fun(A,B) ->
@@ -76,7 +83,7 @@ clean_sort_attrs(Attrs) ->
     end, Attrs)).
 
 %% @doc Returns the list of namespace prefixes "needed" by an element in canonical form
-%% @internal
+%% @private
 -spec needed_ns(Elem :: #xmlElement{}, InclNs :: [string()]) -> [string()].
 needed_ns(#xmlElement{nsinfo = NsInfo, attributes = Attrs}, InclNs) ->
     NeededNs1 = case NsInfo of
@@ -106,12 +113,12 @@ needed_ns(#xmlElement{nsinfo = NsInfo, attributes = Attrs}, InclNs) ->
     end, NeededNs2, Attrs).
 
 %% @doc Make xml ok to eat, in a non-quoted situation.
-%% @internal
+%% @private
 -spec xml_safe_string(term()) -> string().
 xml_safe_string(Term) -> xml_safe_string(Term, false).
 
 %% @doc Make xml ok to eat
-%% @internal
+%% @private
 -spec xml_safe_string(String :: term(), Quotes :: boolean()) -> string().
 xml_safe_string(Atom, Quotes) when is_atom(Atom) -> xml_safe_string(atom_to_list(Atom), Quotes);
 xml_safe_string(Bin, Quotes) when is_binary(Bin) -> xml_safe_string(binary_to_list(Bin), Quotes);
@@ -133,7 +140,7 @@ xml_safe_string(Term, Quotes) ->
 
 %% @doc Worker function for canonicalisation (c14n). It accumulates the canonical string data
 %%      for a given XML "thing" (element/attribute/whatever)
-%% @internal
+%% @private
 -type xml_thing() :: #xmlDocument{} | #xmlElement{} | #xmlAttribute{} | #xmlPI{} | #xmlText{} | #xmlComment{}.
 -spec c14n(XmlThing :: xml_thing(), KnownNs :: [{string(), string()}], ActiveNS :: [string()], Comments :: boolean(), InclNs :: [string()], Acc :: [string() | number()]) -> [string() | number()].
 

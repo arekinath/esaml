@@ -6,6 +6,7 @@
 %% Distributed subject to the terms of the 2-clause BSD license, see
 %% the LICENSE file in the root of the distribution.
 
+%% @doc SAML for Erlang
 -module(esaml).
 -behaviour(application).
 -behaviour(supervisor).
@@ -19,13 +20,15 @@
 -export([config/2, config/1, to_xml/1, decode_response/1, decode_assertion/1, validate_assertion/3]).
 -export([decode_logout_request/1, decode_logout_response/1, decode_idp_metadata/1]).
 
+%% @private
 start(_StartType, _StartArgs) ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
+%% @private
 stop(_State) ->
     ok.
 
-%% @internal
+%% @private
 init([]) ->
     DupeEts = {esaml_ets_table_owner,
         {esaml_util, start_ets, []},
@@ -35,7 +38,10 @@ init([]) ->
         [DupeEts]}}.
 
 %% @doc Retrieve a config record
+-spec config(Name :: atom()) -> term() | undefined.
 config(N) -> config(N, undefined).
+%% @doc Retrieve a config record with default
+-spec config(Name :: atom(), Default :: term()) -> term().
 config(N, D) ->
     case application:get_env(esaml, N) of
         {ok, V} -> V;
@@ -155,6 +161,8 @@ common_attrib_map(Other) -> list_to_atom(Other).
         end
     end).
 
+%% @private
+-spec decode_idp_metadata(Xml :: #xmlElement{}) -> #esaml_idp_metadata{}.
 decode_idp_metadata(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'},
@@ -172,6 +180,8 @@ decode_idp_metadata(Xml) ->
         ?xpath_recurse("/md:EntityDescriptor/md:Organization", esaml_idp_metadata, org, decode_org)
     ], #esaml_idp_metadata{}).
 
+%% @private
+-spec decode_org(Xml :: #xmlElement{}) -> #esaml_org{}.
 decode_org(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'},
@@ -180,8 +190,10 @@ decode_org(Xml) ->
         ?xpath_text_required("/md:Organization/md:OrganizationName/text()", esaml_org, name, bad_org),
         ?xpath_text("/md:Organization/md:OrganizationDisplayName/text()", esaml_org, displayname),
         ?xpath_text("/md:Organization/md:OrganizationURL/text()", esaml_org, url)
-    ], #esaml_contact{}).
+    ], #esaml_org{}).
 
+%% @private
+-spec decode_contact(Xml :: #xmlElement{}) -> #esaml_contact{}.
 decode_contact(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'},
@@ -192,6 +204,8 @@ decode_contact(Xml) ->
         ?xpath_text_append("/md:ContactPerson/md:SurName/text()", esaml_contact, name, " ")
     ], #esaml_contact{}).
 
+%% @private
+-spec decode_logout_request(Xml :: #xmlElement{}) -> #esaml_logoutreq{}.
 decode_logout_request(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
@@ -205,6 +219,8 @@ decode_logout_request(Xml) ->
         ?xpath_text("/samlp:LogoutRequest/saml:Issuer/text()", esaml_logoutreq, issuer)
     ], #esaml_logoutreq{}).
 
+%% @private
+-spec decode_logout_response(Xml :: #xmlElement{}) -> #esaml_logoutresp{}.
 decode_logout_response(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
@@ -217,6 +233,8 @@ decode_logout_response(Xml) ->
         fun logoutresp_map_status_code/1
     ], #esaml_logoutresp{}).
 
+%% @private
+-spec decode_response(Xml :: #xmlElement{}) -> #esaml_response{}.
 decode_response(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
@@ -230,6 +248,8 @@ decode_response(Xml) ->
         ?xpath_recurse("/samlp:Response/saml:Assertion", esaml_response, assertion, decode_assertion)
     ], #esaml_response{}).
 
+%% @private
+-spec decode_assertion(Xml :: #xmlElement{}) -> #esaml_assertion{}.
 decode_assertion(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
@@ -294,6 +314,7 @@ decode_assertion_attributes(Xml) ->
     end, [], Attrs)}.
 
 %% @doc Returns the time at which an assertion is considered stale.
+%% @private
 -spec stale_time(#esaml_assertion{}) -> integer().
 stale_time(A) ->
     esaml_util:thread([
@@ -339,6 +360,10 @@ check_stale(A) ->
         A
     end.
 
+%% @doc Parse and validate an assertion, returning it as a record
+%% @private
+-spec validate_assertion(AssertionXml :: #xmlElement{}, Recipient :: string(), Audience :: string()) -> 
+        {ok, #esaml_assertion{}} | {error, Reason :: term()}.
 validate_assertion(AssertionXml, Recipient, Audience) ->
     case decode_assertion(AssertionXml) of
         {error, Reason} ->
@@ -366,6 +391,10 @@ validate_assertion(AssertionXml, Recipient, Audience) ->
             ], Assertion)
     end.
 
+%% @doc Produce cloned elements with xml:lang set to represent
+%%      multi-locale strings.
+%% @private
+-spec lang_elems(#xmlElement{}, string() | localized_strings()) -> [#xmlElement{}].
 lang_elems(BaseTag, Vals = [{Lang, _} | _]) when is_atom(Lang) ->
     [BaseTag#xmlElement{
         attributes = BaseTag#xmlElement.attributes ++
@@ -380,6 +409,8 @@ lang_elems(BaseTag, Val) ->
             [#xmlText{value = Val}]}].
 
 %% @doc Convert a SAML request/metadata record into XML
+%% @private
+-spec to_xml(record()) -> #xmlElement{}.
 to_xml(#esaml_authnreq{version = V, issue_instant = Time, destination = Dest, issuer = Issuer, consumer_location = Consumer}) ->
     Ns = #xmlNamespace{nodes = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
                                 {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
