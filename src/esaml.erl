@@ -17,7 +17,7 @@
 -export([start/2, stop/1, init/1]).
 -export([stale_time/1]).
 -export([config/2, config/1, to_xml/1, decode_response/1, decode_assertion/1, validate_assertion/3]).
--export([decode_logout_request/1, decode_logout_response/1]).
+-export([decode_logout_request/1, decode_logout_response/1, decode_idp_metadata/1]).
 
 start(_StartType, _StartArgs) ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
@@ -50,6 +50,16 @@ logoutreq_map_reason(R = #esaml_logoutreq{reason = Urn}) ->
     R#esaml_logoutreq{reason = logout_reason_map(Urn)}.
 subject_map_method(R = #esaml_subject{confirmation_method = Method}) ->
     R#esaml_subject{confirmation_method = subject_method_map(Method)}.
+idpmeta_map_nameid(R = #esaml_idp_metadata{name_format = NF}) ->
+    R#esaml_idp_metadata{name_format = nameid_map(NF)}.
+
+nameid_map("urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress") -> email;
+nameid_map("urn:oasis:names:tc:SAML:1.1:nameid-format:X509SubjectName") -> x509;
+nameid_map("urn:oasis:names:tc:SAML:1.1:nameid-format:WindowsDomainQualifiedName") -> windows;
+nameid_map("urn:oasis:names:tc:SAML:2.0:nameid-format:kerberos") -> krb;
+nameid_map("urn:oasis:names:tc:SAML:2.0:nameid-format:persistent") -> persistent;
+nameid_map("urn:oasis:names:tc:SAML:2.0:nameid-format:transient") -> transient;
+nameid_map(_) -> unknown.
 
 subject_method_map("urn:oasis:names:tc:SAML:2.0:cm:bearer") -> bearer;
 subject_method_map(_) -> unknown.
@@ -116,6 +126,13 @@ common_attrib_map(Other) -> list_to_atom(Other).
             _ -> Resp
         end
     end).
+-define(xpath_text_append(XPath, Record, Field, Sep),
+    fun(Resp) ->
+        case xmerl_xpath:string(XPath, Xml, [{namespace, Ns}]) of
+            [#xmlText{value = V}] -> Resp#Record{Field = Resp#Record.Field ++ Sep ++ V};
+            _ -> Resp
+        end
+    end).
 -define(xpath_text_required(XPath, Record, Field, Error),
     fun(Resp) ->
         case xmerl_xpath:string(XPath, Xml, [{namespace, Ns}]) of
@@ -135,6 +152,43 @@ common_attrib_map(Other) -> list_to_atom(Other).
             _ -> Resp
         end
     end).
+
+decode_idp_metadata(Xml) ->
+    Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
+          {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'},
+          {"md", 'urn:oasis:names:tc:SAML:2.0:metadata'}],
+    esaml_util:threaduntil([
+        ?xpath_attr_required("/md:EntityDescriptor/@entityID", esaml_idp_metadata, entity_id, bad_entity),
+        ?xpath_attr_required("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleSignOnService/@Location",
+            esaml_idp_metadata, login_location, missing_sso_location),
+        ?xpath_attr("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleLogoutService/@Location",
+            esaml_idp_metadata, logout_location),
+        ?xpath_text("/md:EntityDescriptor/md:IDPSSODescriptor/md:NameIDFormat/text()",
+            esaml_idp_metadata, name_format),
+        fun idpmeta_map_nameid/1,
+        ?xpath_recurse("/md:EntityDescriptor/md:ContactPerson[@contactType='technical']", esaml_idp_metadata, tech, decode_contact),
+        ?xpath_recurse("/md:EntityDescriptor/md:Organization", esaml_idp_metadata, org, decode_org)
+    ], #esaml_idp_metadata{}).
+
+decode_org(Xml) ->
+    Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
+          {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'},
+          {"md", 'urn:oasis:names:tc:SAML:2.0:metadata'}],
+    esaml_util:threaduntil([
+        ?xpath_text_required("/md:Organization/md:OrganizationName/text()", esaml_org, name, bad_org),
+        ?xpath_text("/md:Organization/md:OrganizationDisplayName/text()", esaml_org, displayname),
+        ?xpath_text("/md:Organization/md:OrganizationURL/text()", esaml_org, url)
+    ], #esaml_contact{}).
+
+decode_contact(Xml) ->
+    Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
+          {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'},
+          {"md", 'urn:oasis:names:tc:SAML:2.0:metadata'}],
+    esaml_util:threaduntil([
+        ?xpath_text_required("/md:ContactPerson/md:EmailAddress/text()", esaml_contact, email, bad_contact),
+        ?xpath_text("/md:ContactPerson/md:GivenName/text()", esaml_contact, name),
+        ?xpath_text_append("/md:ContactPerson/md:SurName/text()", esaml_contact, name, " ")
+    ], #esaml_contact{}).
 
 decode_logout_request(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
@@ -419,6 +473,10 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
             #xmlElement{name = 'md:SingleLogoutService',
                 attributes = [#xmlAttribute{name = isDefault, value = "true"},
                               #xmlAttribute{name = index, value = "0"},
+                              #xmlAttribute{name = 'Binding', value = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-REDIRECT"},
+                              #xmlAttribute{name = 'Location', value = SLOLoc}]},
+            #xmlElement{name = 'md:SingleLogoutService',
+                attributes = [#xmlAttribute{name = index, value = "1"},
                               #xmlAttribute{name = 'Binding', value = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"},
                               #xmlAttribute{name = 'Location', value = SLOLoc}]}
         ]

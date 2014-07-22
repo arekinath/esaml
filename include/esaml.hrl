@@ -21,6 +21,16 @@
 	consumer_location :: string(),
 	logout_location :: string()}).
 
+-type esaml_name_format() :: email | x509 | windows | krb | persistent | transient | unknown.
+-record(esaml_idp_metadata, {org :: #esaml_org{},
+	tech :: #esaml_contact{},
+	signed_requests :: boolean(),
+	certificate :: binary(),
+	entity_id :: string(),
+	login_location :: string(),
+	logout_location :: string(),
+	name_format=unknown :: esaml_name_format()}).
+
 -record(esaml_authnreq, {version = "2.0", issue_instant :: string(),
 	destination :: string(), issuer :: string(), consumer_location :: string()}).
 

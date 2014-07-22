@@ -9,7 +9,9 @@
                   kernel,
                   stdlib,
                   xmerl,
-                  cowboy
+                  cowboy,
+                  ssl,
+                  inets
                  ]},
   {mod, { esaml, []}},
   {env, [

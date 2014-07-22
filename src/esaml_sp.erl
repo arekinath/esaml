@@ -86,17 +86,7 @@ generate_metadata(SP = #esaml_sp{org = Org, tech = Tech}) ->
 -spec setup(#esaml_sp{}) -> #esaml_sp{}.
 setup(SP = #esaml_sp{trusted_fingerprints = FPs, metadata_uri = MetaURI,
                      consume_uri = ConsumeURI, logout_uri = LogoutURI}) ->
-    FPSources = FPs ++ esaml:config(trusted_fingerprints, []),
-    Fingerprints = lists:map(fun(Print) ->
-        if is_list(Print) ->
-            Parts = string:tokens(Print, ":"),
-            list_to_binary(lists:map(fun(P) -> list_to_integer(P, 16) end, Parts));
-        is_binary(Print) ->
-            Print;
-        true ->
-            error("unknown fingerprint format")
-        end
-    end, FPSources),
+    Fingerprints = esaml_util:convert_fingerprints(FPs),
     case MetaURI of undefined -> error("must specify metadata URI"); _ -> ok end,
     case ConsumeURI of undefined -> error("must specify consume URI"); _ -> ok end,
     case LogoutURI of undefined -> error("must specify logout URI"); _ -> ok end,
@@ -131,9 +121,10 @@ validate_logout_request(Xml, SP = #esaml_sp{}) ->
             end
         end,
         fun(X) ->
-            case esaml:decode_logout_request(X) of
+            case (catch esaml:decode_logout_request(X)) of
                 {ok, LR} -> LR;
-                {error, Reason} -> {error, Reason}
+                {'EXIT', Reason} -> {error, Reason};
+                Err -> Err
             end
         end
     ], Xml).
@@ -159,9 +150,10 @@ validate_logout_response(Xml, SP = #esaml_sp{}) ->
             end
         end,
         fun(X) ->
-            case esaml:decode_logout_response(X) of
+            case (catch esaml:decode_logout_response(X)) of
                 {ok, LR} -> LR;
-                {error, Reason} -> {error, Reason}
+                {'EXIT', Reason} -> {error, Reason};
+                Err -> Err
             end
         end,
         fun(LR = #esaml_logoutresp{status = success}) -> LR;
