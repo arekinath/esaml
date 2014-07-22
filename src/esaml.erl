@@ -450,7 +450,7 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
         ]
     },
 
-    SpSso = #xmlElement{name = 'md:SPSSODescriptor',
+    SpSso0 = #xmlElement{name = 'md:SPSSODescriptor',
         attributes = [#xmlAttribute{name = 'protocolSupportEnumeration', value = "urn:oasis:names:tc:SAML:2.0:protocol"},
                       #xmlAttribute{name = 'AuthnRequestsSigned', value = atom_to_list(SignReq)},
                       #xmlAttribute{name = 'WantAssertionsSigned', value = atom_to_list(SignAss)}],
@@ -469,18 +469,23 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
             #xmlElement{name = 'md:AttributeConsumingService',
                 attributes = [#xmlAttribute{name = 'isDefault', value = "true"},
                               #xmlAttribute{name = 'index', value = "0"}],
-                content = [#xmlElement{name = 'md:ServiceName', content = [#xmlText{value = "SAML SP"}]}]},
-            #xmlElement{name = 'md:SingleLogoutService',
-                attributes = [#xmlAttribute{name = isDefault, value = "true"},
-                              #xmlAttribute{name = index, value = "0"},
-                              #xmlAttribute{name = 'Binding', value = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-REDIRECT"},
-                              #xmlAttribute{name = 'Location', value = SLOLoc}]},
-            #xmlElement{name = 'md:SingleLogoutService',
-                attributes = [#xmlAttribute{name = index, value = "1"},
-                              #xmlAttribute{name = 'Binding', value = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"},
-                              #xmlAttribute{name = 'Location', value = SLOLoc}]}
-        ]
-    },
+                content = [#xmlElement{name = 'md:ServiceName', content = [#xmlText{value = "SAML SP"}]}]}]},
+
+    SpSso = case SLOLoc of
+        undefined -> SpSso0;
+        _ ->
+            SpSso0#xmlElement{content = SpSso0#xmlElement.content ++ [
+                #xmlElement{name = 'md:SingleLogoutService',
+                    attributes = [#xmlAttribute{name = isDefault, value = "true"},
+                                  #xmlAttribute{name = index, value = "0"},
+                                  #xmlAttribute{name = 'Binding', value = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-REDIRECT"},
+                                  #xmlAttribute{name = 'Location', value = SLOLoc}]},
+                #xmlElement{name = 'md:SingleLogoutService',
+                    attributes = [#xmlAttribute{name = index, value = "1"},
+                                  #xmlAttribute{name = 'Binding', value = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"},
+                                  #xmlAttribute{name = 'Location', value = SLOLoc}]}
+            ]}
+    end,
 
     esaml_util:build_nsinfo(Ns, #xmlElement{
         name = 'md:EntityDescriptor',
