@@ -8,7 +8,10 @@
 
 %% data types / message records
 
--record(esaml_org, {name :: string(), displayname :: string(), url :: string()}).
+-type localized_strings() :: [{Locale :: atom(), LocalizedString :: string()}].
+-record(esaml_org, {name :: string() | localized_strings(),
+	displayname :: string() | localized_strings(),
+	url :: string() | localized_strings()}).
 
 -record(esaml_contact, {name :: string(), email :: string()}).
 

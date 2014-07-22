@@ -364,6 +364,19 @@ validate_assertion(AssertionXml, Recipient, Audience) ->
             ], Assertion)
     end.
 
+lang_elems(BaseTag, Vals = [{Lang, _} | _]) when is_atom(Lang) ->
+    [BaseTag#xmlElement{
+        attributes = BaseTag#xmlElement.attributes ++
+            [#xmlAttribute{name = 'xml:lang', value = atom_to_list(L)}],
+        content = BaseTag#xmlElement.content ++
+            [#xmlText{value = V}]} || {L,V} <- Vals];
+lang_elems(BaseTag, Val) ->
+    [BaseTag#xmlElement{
+        attributes = BaseTag#xmlElement.attributes ++
+            [#xmlAttribute{name = 'xml:lang', value = "en"}],
+        content = BaseTag#xmlElement.content ++
+            [#xmlText{value = Val}]}].
+
 %% @doc Convert a SAML request/metadata record into XML
 to_xml(#esaml_authnreq{version = V, issue_instant = Time, destination = Dest, issuer = Issuer, consumer_location = Consumer}) ->
     Ns = #xmlNamespace{nodes = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
@@ -435,11 +448,10 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
                                 {"dsig", 'http://www.w3.org/2000/09/xmldsig#'}]},
 
     MdOrg = #xmlElement{name = 'md:Organization',
-        content = [
-            #xmlElement{name = 'md:OrganizationName', content = [#xmlText{value = OrgName}]},
-            #xmlElement{name = 'md:OrganizationDisplayName', content = [#xmlText{value = OrgDisplayName}]},
-            #xmlElement{name = 'md:OrganizationURL', content = [#xmlText{value = OrgUrl}]}
-        ]
+        content =
+            lang_elems(#xmlElement{name = 'md:OrganizationName'}, OrgName) ++
+            lang_elems(#xmlElement{name = 'md:OrganizationDisplayName'}, OrgDisplayName) ++
+            lang_elems(#xmlElement{name = 'md:OrganizationURL'}, OrgUrl)
     },
 
     MdContact = #xmlElement{name = 'md:ContactPerson',

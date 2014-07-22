@@ -85,7 +85,7 @@ generate_metadata(SP = #esaml_sp{org = Org, tech = Tech}) ->
 %% @doc Initialize and validate an esaml_sp record
 -spec setup(#esaml_sp{}) -> #esaml_sp{}.
 setup(SP = #esaml_sp{trusted_fingerprints = FPs, metadata_uri = MetaURI,
-                     consume_uri = ConsumeURI, logout_uri = LogoutURI}) ->
+                     consume_uri = ConsumeURI}) ->
     Fingerprints = esaml_util:convert_fingerprints(FPs),
     case MetaURI of undefined -> error("must specify metadata URI"); _ -> ok end,
     case ConsumeURI of undefined -> error("must specify consume URI"); _ -> ok end,
