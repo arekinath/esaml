@@ -11,18 +11,18 @@
 -export([decode_response/2, encode_http_redirect/3, encode_http_post/3]).
 
 -include_lib("xmerl/include/xmerl.hrl").
--define(?deflate, <<"urn:oasis:names:tc:SAML:2.0:bindings:URL-Encoding:DEFLATE">>).
+-define(deflate, <<"urn:oasis:names:tc:SAML:2.0:bindings:URL-Encoding:DEFLATE">>).
 
 -type uri() :: binary().
 -type html_doc() :: binary().
 
 -spec decode_response(SAMLEncoding :: binary(), SAMLResponse :: binary()) -> #xmlDocument{}.
 decode_response(?deflate, SAMLResponse) ->
-	XmlData = binary_to_list(zlib:unzip(base64:decode(Resp))),
+	XmlData = binary_to_list(zlib:unzip(base64:decode(SAMLResponse))),
 	{Xml, _} = xmerl_scan:string(XmlData, [{namespace_conformant, true}]),
     Xml;
 decode_response(_, SAMLResponse) ->
-	XmlData = base64:decode_to_string(Resp),
+	XmlData = base64:decode_to_string(SAMLResponse),
 	{Xml, _} = xmerl_scan:string(XmlData, [{namespace_conformant, true}]),
     Xml.
 
@@ -31,7 +31,7 @@ encode_http_redirect(IdpTarget, SignedXml, RelayState) ->
 	Req = lists:flatten(xmerl:export([SignedXml], xmerl_xml)),
     Param = edoc_lib:escape_uri(base64:encode_to_string(zlib:zip(Req))),
     RelayStateEsc = edoc_lib:escape_uri(binary_to_list(RelayState)),
-    iolist_to_binary([S#state.idp_target, "?SAMLEncoding=", ?deflate, "&SAMLRequest=", Param, "&RelayState=", RelayStateEsc]).
+    iolist_to_binary([IdpTarget, "?SAMLEncoding=", ?deflate, "&SAMLRequest=", Param, "&RelayState=", RelayStateEsc]).
 
 -spec encode_http_post(IDPTarget :: uri(), SignedXml :: #xmlDocument{}, RelayState :: binary()) -> html_doc().
 encode_http_post(IdpTarget, SignedXml, RelayState) ->

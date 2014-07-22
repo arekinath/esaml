@@ -11,17 +11,47 @@
 -include("esaml.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
--export([setup/1, authn_request/2, metadata/1, consume/2, consume/3]).
+-export([setup/1, generate_authn_request/2, generate_metadata/1]).
+-export([validate_assertion/2, validate_assertion/3]).
 
--callback init(Args :: term(), ModArgs :: term()) -> {ok, ModState :: term()}.
--callback check_duplicate(Assertion :: #esaml_assertion{}, Sha1 :: binary(), ModState :: term()) -> {ok, ModState1 :: term()} | {duplicate, ModState1 :: term()}.
--callback handle_assertion(Assertion :: #esaml_assertion{}, ModState :: term()) -> {ok, ReturnValue :: term(), ModState1 :: term()}.
--callback terminate(ModState :: term()) -> ok.
+%% @doc Return an AuthnRequest as an XML element
+-spec generate_authn_request(IdpURL :: string(), #esaml_sp{}) -> #xmlElement{}.
+generate_authn_request(IdpURL, SP = #esaml_sp{metadata_uri = MetaURI, consume_uri = ConsumeURI}) ->
+    Now = erlang:localtime_to_universaltime(erlang:localtime()),
+    Stamp = esaml_util:datetime_to_saml(Now),
+
+    Xml = esaml:to_xml(#esaml_authnreq{issue_instant = Stamp,
+                                       destination = IdpURL,
+                                       issuer = MetaURI,
+                                       consumer_location = ConsumeURI}),
+    if SP#esaml_sp.sp_sign_requests ->
+        xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
+    true ->
+        Xml
+    end.
+
+%% @doc Return the SP metadata as an XML element
+-spec generate_metadata(#esaml_sp{}) -> #xmlElement{}.
+generate_metadata(SP = #esaml_sp{org = Org, tech = Tech}) ->
+    Xml = esaml:to_xml(#esaml_sp_metadata{
+        org = Org,
+        tech = Tech,
+        signed_requests = SP#esaml_sp.sp_sign_requests,
+        signed_assertions = SP#esaml_sp.idp_signs_assertions or SP#esaml_sp.idp_signs_envelopes,
+        certificate = SP#esaml_sp.certificate,
+        consumer_location = SP#esaml_sp.consume_uri,
+        logout_location = SP#esaml_sp.logout_uri,
+        entity_id = SP#esaml_sp.metadata_uri}),
+    if SP#esaml_sp.sp_sign_metadata ->
+        xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
+    true ->
+        Xml
+    end.
 
 %% @doc Initialize and validate an esaml_sp record
 -spec setup(#esaml_sp{}) -> #esaml_sp{}.
 setup(SP = #esaml_sp{trusted_fingerprints = FPs, metadata_uri = MetaURI,
-                     consume_uri = ConsumeURI}) ->
+                     consume_uri = ConsumeURI, logout_uri = LogoutURI}) ->
     FPSources = FPs ++ esaml:config(trusted_fingerprints, []),
     Fingerprints = lists:map(fun(Print) ->
         if is_list(Print) ->
@@ -45,14 +75,13 @@ setup(SP = #esaml_sp{trusted_fingerprints = FPs, metadata_uri = MetaURI,
         SP#esaml_sp{trusted_fingerprints = Fingerprints}
     end.
 
-%% @doc Consume an assertion envelope in parsed XML
--spec consume(Xml :: #xmlElement{} | #xmlDocument{}, #esaml_sp{}) -> {ok, ReturnValue :: term()} | {error, Reason :: term()}.
-consume(Xml, SP = #esaml_sp{}) ->
-    consume(Xml, [], SP).
+%% @doc Validate and decode an assertion envelope in parsed XML
+-spec validate_assertion(Xml :: #xmlElement{} | #xmlDocument{}, #esaml_sp{}) -> {ok, Assertion :: #esaml_assertion{}} | {error, Reason :: term()}.
+validate_assertion(Xml, SP = #esaml_sp{}) ->
+    validate_assertion(Xml, fun(_A, _Digest) -> ok end, SP).
 
-%% @doc Consume an assertion envelope in parsed XML, with additional arguments
--spec consume(Xml :: #xmlElement{} | #xmlDocument{}, Args :: term(), #esaml_sp{}) -> {ok, ReturnValue :: term()} | {error, Reason :: term()}.
-consume(Xml, Args, SP = #esaml_sp{}) ->
+-spec validate_assertion(Xml :: #xmlElement{} | #xmlDocument{}, DuplicateFun :: fun(), #esaml_sp{}) -> {ok, Assertion :: #esaml_assertion{}} | {error, Reason :: term()}.
+validate_assertion(Xml, DuplicateFun, SP = #esaml_sp{}) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
     esaml_util:threaduntil([
@@ -87,48 +116,9 @@ consume(Xml, Args, SP = #esaml_sp{}) ->
             end
         end,
         fun(AR) ->
-            {ok, ModState} = apply(SP#esaml_sp.module, init, [Args, SP#esaml_sp.modargs]),
-            case apply(SP#esaml_sp.module, check_duplicate, [AR, xmerl_dsig:digest(Xml), ModState]) of
-                {ok, ModState2} ->
-                    {ok, ReturnValue, ModState3} = apply(SP#esaml_sp.module, handle_assertion, [AR, ModState2]),
-                    ok = apply(SP#esaml_sp.module, terminate, [ModState3]),
-                    ReturnValue;
-                {duplicate, ModState2} ->
-                    ok = apply(SP#esaml_sp.module, terminate, [ModState2]),
-                    {error, duplicate}
+            case DuplicateFun(AR, xmerl_dsig:digest(Xml)) of
+                ok -> AR;
+                _ -> {error, duplicate}
             end
         end
     ], Xml).
-
-%% @doc Return an AuthnRequest as an XML element
--spec authn_request(IdpURL :: string(), #esaml_sp{}) -> #xmlElement{}.
-authn_request(IdpURL, SP = #esaml_sp{metadata_uri = MetaURI, consume_uri = ConsumeURI}) ->
-    Now = erlang:localtime_to_universaltime(erlang:localtime()),
-    Stamp = esaml_util:datetime_to_saml(Now),
-
-    Xml = esaml:to_xml(#esaml_authnreq{issue_instant = Stamp,
-                                       destination = IdpURL,
-                                       issuer = MetaURI,
-                                       consumer_location = ConsumeURI}),
-    if SP#esaml_sp.sp_sign_requests ->
-        xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
-    true ->
-        Xml
-    end.
-
-%% @doc Return the SP metadata as an XML element
--spec metadata(#esaml_sp{}) -> #xmlElement{}.
-metadata(SP = #esaml_sp{org = Org, tech = Tech}) ->
-    Xml = esaml:to_xml(#esaml_sp_metadata{
-        org = Org,
-        tech = Tech,
-        signed_requests = SP#esaml_sp.sp_sign_requests,
-        signed_assertions = SP#esaml_sp.idp_signs_assertions or SP#esaml_sp.idp_signs_envelopes,
-        certificate = SP#esaml_sp.certificate,
-        consumer_location = SP#esaml_sp.consume_uri,
-        entity_id = SP#esaml_sp.metadata_uri}),
-    if SP#esaml_sp.sp_sign_metadata ->
-        xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
-    true ->
-        Xml
-    end.
