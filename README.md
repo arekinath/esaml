@@ -6,4 +6,8 @@ IdP functionality is planned to be added in the future.
 
 The simplest way to use esaml in your app is with the `esaml_cowboy` module. There is an example under `examples/sp` that shows how to make a simple SAML SP in this way.
 
+# API documentation
+
+http://arekinath.github.io/esaml/
+
 TODO: more documentation
