@@ -59,7 +59,7 @@ sign(ElementIn, PrivateKey, CertBin) ->
     % first we need the digest, to generate our SignedInfo element
     CanonXml = xmerl_c14n:c14n(Element),
     DigestValue = base64:encode_to_string(
-        crypto:sha(unicode:characters_to_binary(CanonXml, unicode, utf8))),
+        crypto:hash(sha, unicode:characters_to_binary(CanonXml, unicode, utf8))),
 
     Ns = #xmlNamespace{nodes = [{"ds", 'http://www.w3.org/2000/09/xmldsig#'}]},
     SigInfo = esaml_util:build_nsinfo(Ns, #xmlElement{
@@ -129,7 +129,7 @@ digest(Element) ->
 
     CanonXml = xmerl_c14n:c14n(strip(Element), false, InclNs),
     CanonXmlUtf8 = unicode:characters_to_binary(CanonXml, unicode, utf8),
-    crypto:sha(CanonXmlUtf8).
+    crypto:hash(sha, CanonXmlUtf8).
 
 %% @doc Verifies an XML digital signature on the given element.
 %%
@@ -154,7 +154,7 @@ verify(Element, Fingerprints) ->
 
     CanonXml = xmerl_c14n:c14n(strip(Element), false, InclNs),
     CanonXmlUtf8 = unicode:characters_to_binary(CanonXml, unicode, utf8),
-    CanonSha = crypto:sha(CanonXmlUtf8),
+    CanonSha = crypto:hash(sha, CanonXmlUtf8),
 
     [#xmlText{value = Sha64}] = xmerl_xpath:string("ds:Signature/ds:SignedInfo/ds:Reference/ds:DigestValue/text()", Element, [{namespace, DsNs}]),
     CanonSha2 = base64:decode(Sha64),
@@ -172,7 +172,7 @@ verify(Element, Fingerprints) ->
 
         [#xmlText{value = Cert64}] = xmerl_xpath:string("ds:Signature//ds:X509Certificate/text()", Element, [{namespace, DsNs}]),
         CertBin = base64:decode(Cert64),
-        CertHash = crypto:sha(CertBin),
+        CertHash = crypto:hash(sha, CertBin),
 
         Cert = public_key:pkix_decode_cert(CertBin, plain),
         {_, KeyBin} = Cert#'Certificate'.tbsCertificate#'TBSCertificate'.subjectPublicKeyInfo#'SubjectPublicKeyInfo'.subjectPublicKey,
@@ -271,7 +271,7 @@ sign_and_verify_test() ->
     SignedXml = sign(Doc, Key, CertBin),
     Doc = strip(SignedXml),
     false = (Doc =:= SignedXml),
-    ok = verify(SignedXml, [crypto:sha(CertBin)]).
+    ok = verify(SignedXml, [crypto:hash(sha, CertBin)]).
 
 sign_generate_id_test() ->
     {Doc, _} = xmerl_scan:string("<x:foo xmlns:x=\"urn:foo:x:\"><x:name>blah</x:name></x:foo>", [{namespace_conformant, true}]),
@@ -296,6 +296,6 @@ utf8_test() ->
     [#xmlAttribute{name = 'attr', value = AttrValue}] = xmerl_xpath:string("x:name/@attr", SignedXml, [{namespace, Ns}]),
     TextValue = unicode:characters_to_list(ThisPerson),
     [#xmlText{value = TextValue}] = xmerl_xpath:string("x:name/text()", SignedXml, [{namespace, Ns}]),
-    ok = verify(SignedXml, [crypto:sha(CertBin)]).
+    ok = verify(SignedXml, [crypto:hash(sha, CertBin)]).
 
 -endif.
