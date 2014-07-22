@@ -71,30 +71,15 @@ handle(Req, State) ->
     {ok, Req4} = apply(?MODULE, MethodAtom, [Operation, Req3, State]),
     {ok, Req4, State}.
 
-decode_saml_response(PostVals) ->
-    case (catch begin
-        Resp = proplists:get_value(<<"SAMLResponse">>, PostVals),
-        XmlData = case proplists:get_value(<<"SAMLEncoding">>, PostVals) of
-            <<"urn:oasis:names:tc:SAML:2.0:bindings:URL-Encoding:DEFLATE">> ->
-                binary_to_list(zlib:unzip(base64:decode(Resp)));
-            _ ->
-                base64:decode_to_string(Resp)
-        end,
-        {Xml, _} = xmerl_scan:string(XmlData, [{namespace_conformant, true}]),
-        Xml
-    end) of
-        {'EXIT', Reason} ->
-            {error, Reason};
-        Other ->
-            Other
-    end.
-
 post(<<"consume">>, Req, #state{max_saml_response_size = MaxSamlResponseSize,
         sp = SP}) ->
     {ok, PostVals, Req2} = cowboy_req:body_qs(MaxSamlResponseSize, Req),
+    SAMLEncoding = proplists:get_value(<<"SAMLEncoding">>, PostVals),
+    SAMLResponse = proplists:get_value(<<"SAMLResponse">>, PostVals),
+    RelayState = proplists:get_value(<<"RelayState">>, PostVals),
 
-    case decode_saml_response(PostVals) of
-        {error, Reason} ->
+    case (catch esaml_binding:decode_response(SAMLEncoding, SAMLResponse)) of
+        {'EXIT', Reason} ->
             error_logger:warning_msg("Failed to decode SAMLResponse value:\n  ~p\n  req = ~p\n", [Reason, Req2]),
             cowboy_req:reply(403, [], <<"Failed to decode SAMLResponse value">>, Req2);
         Xml ->
@@ -110,34 +95,13 @@ post(<<"consume">>, Req, #state{max_saml_response_size = MaxSamlResponseSize,
 post(_, Req, _) ->
     cowboy_req:reply(404, [], <<>>, Req).
 
-generate_post_html(Dest, Req) ->
-    <<"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">
-<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">
-<head>
-<meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" />
-<title>POST data</title>
-</head>
-<body onload=\"document.forms[0].submit()\">
-<noscript>
-<p><strong>Note:</strong> Since your browser does not support JavaScript, you must press the button below once to proceed.</p>
-</noscript>
-<form method=\"post\" action=\"",Dest/binary,"\">
-<input type=\"hidden\" name=\"SAMLRequest\" value=\"",Req/binary,"\" />
-<noscript><input type=\"submit\" value=\"Submit\" /></noscript>
-</form>
-</body>
-</html>">>.
-
 get(<<"auth">>, Req, S = #state{sp = SP}) ->
     SignedXml = SP:authn_request(S#state.idp_target),
-    AuthnReq = lists:flatten(xmerl:export([SignedXml], xmerl_xml)),
-    Param = edoc_lib:escape_uri(base64:encode_to_string(zlib:zip(AuthnReq))),
-    Target = list_to_binary(S#state.idp_target ++ "?SAMLEncoding=urn:oasis:names:tc:SAML:2.0:bindings:URL-Encoding:DEFLATE&SAMLRequest=" ++ Param),
+    Target = esaml_binding:encode_http_redirect(S#state.idp_target, SignedXml, <<>>),
     {UA, _} = cowboy_req:header(<<"user-agent">>, Req, <<"">>),
     IsIE = not (binary:match(UA, <<"MSIE">>) =:= nomatch),
     if IsIE andalso (byte_size(Target) > 2042) ->
-        BaseData = base64:encode_to_string(AuthnReq),
-        Html = generate_post_html(list_to_binary(S#state.idp_target), list_to_binary(BaseData)),
+        Html = esaml_binding:encode_http_post(S#state.idp_target, SignedXml, <<>>),
         cowboy_req:reply(200, [
             {<<"Cache-Control">>, <<"no-cache">>},
             {<<"Pragma">>, <<"no-cache">>}
