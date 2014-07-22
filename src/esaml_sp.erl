@@ -111,12 +111,12 @@ validate_logout_request(Xml, SP = #esaml_sp{}) ->
             end
         end,
         fun(X) ->
-            if SP#esaml_sp.idp_signs_envelopes ->
+            if SP#esaml_sp.idp_signs_logout_requests ->
                 case xmerl_dsig:verify(X, SP#esaml_sp.trusted_fingerprints) of
                     ok -> X;
                     OuterError -> {error, OuterError}
                 end;
-            true -> {error, cannot_validate}
+            true -> X
             end
         end,
         fun(X) ->
