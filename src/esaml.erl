@@ -36,11 +36,15 @@
     authnreq/0, subject/0, assertion/0, logoutreq/0,
     logoutresp/0, response/0, sp/0]).
 
--type localized_strings() :: [{Locale :: atom(), LocalizedString :: string()}].
+-type localized_string() :: string() | [{Locale :: atom(), LocalizedString :: string()}].
 -type name_format() :: email | x509 | windows | krb | persistent | transient | unknown.
 -type logout_reason() :: user | admin.
 -type status_code() :: success | request_error | response_error | bad_version | authn_failed | bad_attr | denied | bad_binding.
--export_type([localized_strings/0, name_format/0, logout_reason/0, status_code/0]).
+-type version() :: string().
+-type datetime() :: string() | binary().
+-type condition() :: {not_before, esaml:datetime()} | {not_on_or_after, esaml:datetime()} | {audience, string()}.
+-type conditions() :: [condition()].
+-export_type([localized_string/0, name_format/0, logout_reason/0, status_code/0, version/0, datetime/0, conditions/0]).
 
 %% @private
 start(_StartType, _StartArgs) ->
@@ -425,7 +429,7 @@ validate_assertion(AssertionXml, Recipient, Audience) ->
 %% @doc Produce cloned elements with xml:lang set to represent
 %%      multi-locale strings.
 %% @private
--spec lang_elems(#xmlElement{}, string() | localized_strings()) -> [#xmlElement{}].
+-spec lang_elems(#xmlElement{}, localized_string()) -> [#xmlElement{}].
 lang_elems(BaseTag, Vals = [{Lang, _} | _]) when is_atom(Lang) ->
     [BaseTag#xmlElement{
         attributes = BaseTag#xmlElement.attributes ++

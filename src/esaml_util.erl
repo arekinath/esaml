@@ -36,7 +36,7 @@ convert_fingerprints(FPs) ->
     end, FPSources).
 
 %% @doc Converts a calendar:datetime() into SAML time string
--spec datetime_to_saml(Time :: calendar:datetime()) -> string().
+-spec datetime_to_saml(Time :: calendar:datetime()) -> esaml:datetime().
 datetime_to_saml(Time) ->
     {{Y,Mo,D}, {H, Mi, S}} = Time,
     lists:flatten(io_lib:format("~4.10.0B-~2.10.0B-~2.10.0BT~2.10.0B:~2.10.0B:~2.10.0BZ", [Y, Mo, D, H, Mi, S])).
@@ -44,7 +44,7 @@ datetime_to_saml(Time) ->
 %% @doc Converts a SAML time string into a calendar:datetime()
 %%
 %% Inverse of datetime_to_saml/1
--spec saml_to_datetime(Stamp :: binary() | string()) -> calendar:datetime().
+-spec saml_to_datetime(Stamp :: esaml:datetime()) -> calendar:datetime().
 saml_to_datetime(Stamp) ->
     StampBin = if is_list(Stamp) -> list_to_binary(Stamp); true -> Stamp end,
     <<YBin:4/binary, "-", MoBin:2/binary, "-", DBin:2/binary, "T",
@@ -178,8 +178,8 @@ load_metadata(Url) ->
 
 %% @doc Checks for a duplicate assertion using ETS tables in memory on all available nodes.
 %%
-%% This is a helper to be used as a DuplicateFun with esaml_sp:validate_assertion/3. 
-%% If you aren't using standard erlang distribution for your app, you probably don't 
+%% This is a helper to be used as a DuplicateFun with esaml_sp:validate_assertion/3.
+%% If you aren't using standard erlang distribution for your app, you probably don't
 %% want to use this.
 -spec check_dupe_ets(Assertion :: esaml:assertion(), Digest :: binary()) -> ok | {error, duplicate_assertion}.
 check_dupe_ets(A, Digest) ->
