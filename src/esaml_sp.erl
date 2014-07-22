@@ -14,6 +14,7 @@
 -export([setup/1, generate_authn_request/2, generate_metadata/1]).
 -export([validate_assertion/2, validate_assertion/3]).
 -export([generate_logout_request/3, generate_logout_response/3]).
+-export([validate_logout_request/2, validate_logout_response/2]).
 
 %% @doc Return an AuthnRequest as an XML element
 -spec generate_authn_request(IdpURL :: string(), #esaml_sp{}) -> #xmlElement{}.
@@ -108,6 +109,64 @@ setup(SP = #esaml_sp{trusted_fingerprints = FPs, metadata_uri = MetaURI,
     true ->
         SP#esaml_sp{trusted_fingerprints = Fingerprints}
     end.
+
+-spec validate_logout_request(Xml :: #xmlElement{} | #xmlDocument{}, #esaml_sp{}) -> {ok, Request :: #esaml_logoutreq{}} | {error, Reason :: term()}.
+validate_logout_request(Xml, SP = #esaml_sp{}) ->
+    Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
+          {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
+    esaml_util:threaduntil([
+        fun(X) ->
+            case xmerl_xpath:string("/samlp:LogoutRequest", X, [{namespace, Ns}]) of
+                [#xmlElement{}] -> X;
+                _ -> {error, bad_assertion}
+            end
+        end,
+        fun(X) ->
+            if SP#esaml_sp.idp_signs_envelopes ->
+                case xmerl_dsig:verify(X, SP#esaml_sp.trusted_fingerprints) of
+                    ok -> X;
+                    OuterError -> {error, OuterError}
+                end;
+            true -> {error, cannot_validate}
+            end
+        end,
+        fun(X) ->
+            case esaml:decode_logout_request(X) of
+                {ok, LR} -> LR;
+                {error, Reason} -> {error, Reason}
+            end
+        end
+    ], Xml).
+
+-spec validate_logout_response(Xml :: #xmlElement{} | #xmlDocument{}, #esaml_sp{}) -> {ok, Response :: #esaml_logoutresp{}} | {error, Reason :: term()}.
+validate_logout_response(Xml, SP = #esaml_sp{}) ->
+    Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
+          {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
+    esaml_util:threaduntil([
+        fun(X) ->
+            case xmerl_xpath:string("/samlp:LogoutResponse", X, [{namespace, Ns}]) of
+                [#xmlElement{}] -> X;
+                _ -> {error, bad_assertion}
+            end
+        end,
+        fun(X) ->
+            if SP#esaml_sp.idp_signs_envelopes ->
+                case xmerl_dsig:verify(X, SP#esaml_sp.trusted_fingerprints) of
+                    ok -> X;
+                    OuterError -> {error, OuterError}
+                end;
+            true -> {error, cannot_validate}
+            end
+        end,
+        fun(X) ->
+            case esaml:decode_logout_response(X) of
+                {ok, LR} -> LR;
+                {error, Reason} -> {error, Reason}
+            end
+        end,
+        fun(LR = #esaml_logoutresp{status = success}) -> LR;
+           (#esaml_logoutresp{status = S}) -> {error, S} end
+    ], Xml).
 
 %% @doc Validate and decode an assertion envelope in parsed XML
 -spec validate_assertion(Xml :: #xmlElement{} | #xmlDocument{}, #esaml_sp{}) -> {ok, Assertion :: #esaml_assertion{}} | {error, Reason :: term()}.
