@@ -530,17 +530,22 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
         ]
     },
 
-    SpSso0 = #xmlElement{name = 'md:SPSSODescriptor',
-        attributes = [#xmlAttribute{name = 'protocolSupportEnumeration', value = "urn:oasis:names:tc:SAML:2.0:protocol"},
-                      #xmlAttribute{name = 'AuthnRequestsSigned', value = atom_to_list(SignReq)},
-                      #xmlAttribute{name = 'WantAssertionsSigned', value = atom_to_list(SignAss)}],
-        content = [
+    KeyDesc = case CertBin of
+        undefined -> [];
+        C when is_binary(C) ->
             #xmlElement{name = 'md:KeyDescriptor',
                 attributes = [#xmlAttribute{name = 'use', value = "signing"}],
                 content = [#xmlElement{name = 'dsig:KeyInfo',
                     content = [#xmlElement{name = 'dsig:X509Data',
                         content = [#xmlElement{name = 'dsig:X509Certificate',
-                            content = [#xmlText{value = base64:encode_to_string(CertBin)}]}]}]}]},
+                            content = [#xmlText{value = base64:encode_to_string(CertBin)}]}]}]}]}
+    end,
+
+    SpSso0 = #xmlElement{name = 'md:SPSSODescriptor',
+        attributes = [#xmlAttribute{name = 'protocolSupportEnumeration', value = "urn:oasis:names:tc:SAML:2.0:protocol"},
+                      #xmlAttribute{name = 'AuthnRequestsSigned', value = atom_to_list(SignReq)},
+                      #xmlAttribute{name = 'WantAssertionsSigned', value = atom_to_list(SignAss)}],
+        content = KeyDesc ++ [
             #xmlElement{name = 'md:AssertionConsumerService',
                 attributes = [#xmlAttribute{name = 'isDefault', value = "true"},
                               #xmlAttribute{name = 'index', value = "0"},

@@ -17,6 +17,14 @@
 -export([generate_logout_request/3, generate_logout_response/3]).
 -export([validate_logout_request/2, validate_logout_response/2]).
 
+%% @private
+add_xml_id(Xml) ->
+    Xml#xmlElement{attributes = Xml#xmlElement.attributes ++ [
+        #xmlAttribute{name = 'ID',
+            value = uuid:to_string(uuid:uuid1()),
+            namespace = #xmlNamespace{}}
+        ]}.
+
 %% @doc Return an AuthnRequest as an XML element
 -spec generate_authn_request(IdpURL :: string(), esaml:sp()) -> #xmlElement{}.
 generate_authn_request(IdpURL, SP = #esaml_sp{metadata_uri = MetaURI, consume_uri = ConsumeURI}) ->
@@ -30,7 +38,7 @@ generate_authn_request(IdpURL, SP = #esaml_sp{metadata_uri = MetaURI, consume_ur
     if SP#esaml_sp.sp_sign_requests ->
         xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
     true ->
-        Xml
+        add_xml_id(Xml)
     end.
 
 %% @doc Return a LogoutRequest as an XML element
@@ -47,7 +55,7 @@ generate_logout_request(IdpURL, NameID, SP = #esaml_sp{metadata_uri = MetaURI}) 
     if SP#esaml_sp.sp_sign_requests ->
         xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
     true ->
-        error("logout requests must be signed")
+        add_xml_id(Xml)
     end.
 
 %% @doc Return a LogoutResponse as an XML element
@@ -63,7 +71,7 @@ generate_logout_response(IdpURL, Status, SP = #esaml_sp{metadata_uri = MetaURI})
     if SP#esaml_sp.sp_sign_requests ->
         xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
     true ->
-        error("logout responses must be signed")
+        add_xml_id(Xml)
     end.
 
 %% @doc Return the SP metadata as an XML element
@@ -81,7 +89,7 @@ generate_metadata(SP = #esaml_sp{org = Org, tech = Tech}) ->
     if SP#esaml_sp.sp_sign_metadata ->
         xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
     true ->
-        Xml
+        add_xml_id(Xml)
     end.
 
 %% @doc Initialize and validate an esaml_sp record
@@ -102,7 +110,7 @@ setup(SP = #esaml_sp{trusted_fingerprints = FPs, metadata_uri = MetaURI,
     end.
 
 %% @doc Validate and parse a LogoutRequest element
--spec validate_logout_request(Xml :: #xmlElement{} | #xmlDocument{}, esaml:sp()) -> 
+-spec validate_logout_request(Xml :: #xmlElement{} | #xmlDocument{}, esaml:sp()) ->
         {ok, Request :: esaml:logoutreq()} | {error, Reason :: term()}.
 validate_logout_request(Xml, SP = #esaml_sp{}) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
@@ -133,7 +141,7 @@ validate_logout_request(Xml, SP = #esaml_sp{}) ->
     ], Xml).
 
 %% @doc Validate and parse a LogoutResponse element
--spec validate_logout_response(Xml :: #xmlElement{} | #xmlDocument{}, esaml:sp()) -> 
+-spec validate_logout_response(Xml :: #xmlElement{} | #xmlDocument{}, esaml:sp()) ->
         {ok, Response :: esaml:logoutresp()} | {error, Reason :: term()}.
 validate_logout_response(Xml, SP = #esaml_sp{}) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
@@ -169,16 +177,16 @@ validate_logout_response(Xml, SP = #esaml_sp{}) ->
     ], Xml).
 
 %% @doc Validate and decode an assertion envelope in parsed XML
--spec validate_assertion(Xml :: #xmlElement{} | #xmlDocument{}, esaml:sp()) -> 
+-spec validate_assertion(Xml :: #xmlElement{} | #xmlDocument{}, esaml:sp()) ->
         {ok, Assertion :: esaml:assertion()} | {error, Reason :: term()}.
 validate_assertion(Xml, SP = #esaml_sp{}) ->
     validate_assertion(Xml, fun(_A, _Digest) -> ok end, SP).
 
 %% @doc Validate and decode an assertion envelope in parsed XML
 %%
-%% The DuplicateFun should have signature fun(#esaml_assertion{}, Digest :: binary()) -> 
+%% The DuplicateFun should have signature fun(#esaml_assertion{}, Digest :: binary()) ->
 %% ok | term(). It is intended to detect duplicate assertions in the case of a replay attack.
--spec validate_assertion(Xml :: #xmlElement{} | #xmlDocument{}, DuplicateFun :: fun(), esaml:sp()) -> 
+-spec validate_assertion(Xml :: #xmlElement{} | #xmlDocument{}, DuplicateFun :: fun(), esaml:sp()) ->
         {ok, Assertion :: esaml:assertion()} | {error, Reason :: term()}.
 validate_assertion(Xml, DuplicateFun, SP = #esaml_sp{}) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
