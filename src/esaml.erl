@@ -533,12 +533,12 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
     KeyDesc = case CertBin of
         undefined -> [];
         C when is_binary(C) ->
-            #xmlElement{name = 'md:KeyDescriptor',
+            [#xmlElement{name = 'md:KeyDescriptor',
                 attributes = [#xmlAttribute{name = 'use', value = "signing"}],
                 content = [#xmlElement{name = 'dsig:KeyInfo',
                     content = [#xmlElement{name = 'dsig:X509Data',
                         content = [#xmlElement{name = 'dsig:X509Certificate',
-                            content = [#xmlText{value = base64:encode_to_string(CertBin)}]}]}]}]}
+                            content = [#xmlText{value = base64:encode_to_string(CertBin)}]}]}]}]}]
     end,
 
     SpSso0 = #xmlElement{name = 'md:SPSSODescriptor',
