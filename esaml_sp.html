@@ -10,10 +10,20 @@
 <hr>
 
 <h1>Module esaml_sp</h1>
-<ul class="index"><li><a href="#description">Description</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>SAML Service Provider (SP) routines.
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>SAML Service Provider (SP) routines.
 
 
 <h2><a name="description">Description</a></h2>SAML Service Provider (SP) routines
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-dupe_fun">dupe_fun()</a></h3>
+<p><tt>dupe_fun() = fun((<a href="esaml.html#type-assertion">esaml:assertion()</a>, Digest::binary()) -&gt; ok | term())</tt></p>
+
+
+<h3 class="typedecl"><a name="type-xml">xml()</a></h3>
+<p><tt>xml() = #xmlElement{} | #xmlDocument{}</tt></p>
+
+
 <h2><a name="index">Function Index</a></h2>
 <table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#generate_authn_request-2">generate_authn_request/2</a></td><td>Return an AuthnRequest as an XML element.</td></tr>
 <tr><td valign="top"><a href="#generate_logout_request-3">generate_logout_request/3</a></td><td>Return a LogoutRequest as an XML element.</td></tr>
@@ -40,7 +50,7 @@
 
 <h3 class="function"><a name="generate_logout_response-3">generate_logout_response/3</a></h3>
 <div class="spec">
-<p><tt>generate_logout_response(IdpUR::string(), Status::<a href="esaml.html#type-status_code">esaml:status_code()</a>, SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; #xmlElement{}</tt><br></p>
+<p><tt>generate_logout_response(IdpURL::string(), Status::<a href="esaml.html#type-status_code">esaml:status_code()</a>, SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; #xmlElement{}</tt><br></p>
 </div><p>Return a LogoutResponse as an XML element</p>
 
 <h3 class="function"><a name="generate_metadata-1">generate_metadata/1</a></h3>
@@ -55,29 +65,29 @@
 
 <h3 class="function"><a name="validate_assertion-2">validate_assertion/2</a></h3>
 <div class="spec">
-<p><tt>validate_assertion(Xml::#xmlElement{} | #xmlDocument{}, SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; {ok, Assertion::<a href="esaml.html#type-assertion">esaml:assertion()</a>} | {error, Reason::term()}</tt><br></p>
+<p><tt>validate_assertion(Xml::<a href="#type-xml">xml()</a>, SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; {ok, <a href="esaml.html#type-assertion">esaml:assertion()</a>} | {error, Reason::term()}</tt><br></p>
 </div><p>Validate and decode an assertion envelope in parsed XML</p>
 
 <h3 class="function"><a name="validate_assertion-3">validate_assertion/3</a></h3>
 <div class="spec">
-<p><tt>validate_assertion(Xml::#xmlElement{} | #xmlDocument{}, DuplicateFun::function(), SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; {ok, Assertion::<a href="esaml.html#type-assertion">esaml:assertion()</a>} | {error, Reason::term()}</tt><br></p>
+<p><tt>validate_assertion(Xml::<a href="#type-xml">xml()</a>, DuplicateFun::<a href="#type-dupe_fun">dupe_fun()</a>, SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; {ok, <a href="esaml.html#type-assertion">esaml:assertion()</a>} | {error, Reason::term()}</tt><br></p>
 </div><p><p>Validate and decode an assertion envelope in parsed XML</p>
  
-  The DuplicateFun should have signature fun(#esaml_assertion{}, Digest :: binary()) -&gt;
-  ok | term(). It is intended to detect duplicate assertions in the case of a replay attack.</p>
+  The dupe_fun argument is intended to detect duplicate assertions
+  in the case of a replay attack.</p>
 
 <h3 class="function"><a name="validate_logout_request-2">validate_logout_request/2</a></h3>
 <div class="spec">
-<p><tt>validate_logout_request(Xml::#xmlElement{} | #xmlDocument{}, SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; {ok, Request::<a href="esaml.html#type-logoutreq">esaml:logoutreq()</a>} | {error, Reason::term()}</tt><br></p>
+<p><tt>validate_logout_request(Xml::<a href="#type-xml">xml()</a>, SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; {ok, <a href="esaml.html#type-logoutreq">esaml:logoutreq()</a>} | {error, Reason::term()}</tt><br></p>
 </div><p>Validate and parse a LogoutRequest element</p>
 
 <h3 class="function"><a name="validate_logout_response-2">validate_logout_response/2</a></h3>
 <div class="spec">
-<p><tt>validate_logout_response(Xml::#xmlElement{} | #xmlDocument{}, SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; {ok, Response::<a href="esaml.html#type-logoutresp">esaml:logoutresp()</a>} | {error, Reason::term()}</tt><br></p>
+<p><tt>validate_logout_response(Xml::<a href="#type-xml">xml()</a>, SP::<a href="esaml.html#type-sp">esaml:sp()</a>) -&gt; {ok, <a href="esaml.html#type-logoutresp">esaml:logoutresp()</a>} | {error, Reason::term()}</tt><br></p>
 </div><p>Validate and parse a LogoutResponse element</p>
 <hr>
 
 <div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
-<p><i>Generated by EDoc, Jul 23 2014, 09:52:53.</i></p>
+<p><i>Generated by EDoc, Jul 24 2014, 23:12:16.</i></p>
 </body>
 </html>
