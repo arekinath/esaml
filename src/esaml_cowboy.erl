@@ -9,7 +9,7 @@
 %% @doc Convenience functions for use with Cowboy handlers
 %%
 %% This module makes it easier to use esaml in your Cowboy-based web
-%% application, by providing easy wrappers around the functions in 
+%% application, by providing easy wrappers around the functions in
 %% esaml_binding and esaml_sp.
 -module(esaml_cowboy).
 
@@ -26,7 +26,7 @@
 %% RelayState is an arbitrary blob up to 80 bytes long that will
 %% be returned verbatim with any assertion that results from this
 %% AuthnRequest.
--spec reply_with_authnreq(SP :: esaml:sp(), IdPSSOEndpoint :: uri(), RelayState :: binary(), Req) -> {ok, Req}.
+-spec reply_with_authnreq(esaml:sp(), IdPSSOEndpoint :: uri(), RelayState :: binary(), Req) -> {ok, Req}.
 reply_with_authnreq(SP, IDP, RelayState, Req) ->
     SignedXml = SP:generate_authn_request(IDP),
     reply_with_req(IDP, SignedXml, RelayState, Req).
@@ -35,7 +35,7 @@ reply_with_authnreq(SP, IDP, RelayState, Req) ->
 %%
 %% NameID should be the exact subject name from the assertion you
 %% wish to log out.
--spec reply_with_logoutreq(SP :: esaml:sp(), IdPSLOEndpoint :: uri(), NameID :: string(), Req) -> {ok, Req}.
+-spec reply_with_logoutreq(esaml:sp(), IdPSLOEndpoint :: uri(), NameID :: string(), Req) -> {ok, Req}.
 reply_with_logoutreq(SP, IDP, NameID, Req) ->
     SignedXml = SP:generate_logout_request(IDP, NameID),
     reply_with_req(IDP, SignedXml, <<>>, Req).
@@ -44,7 +44,7 @@ reply_with_logoutreq(SP, IDP, NameID, Req) ->
 %%
 %% Be sure to keep the RelayState from the original LogoutRequest that you
 %% received to allow the IdP to keep state.
--spec reply_with_logoutresp(SP :: esaml:sp(), IdPSLOEndpoint :: uri(), Status :: esaml:status_code(), RelayState :: binary(), Req) -> {ok, Req}.
+-spec reply_with_logoutresp(esaml:sp(), IdPSLOEndpoint :: uri(), esaml:status_code(), RelayState :: binary(), Req) -> {ok, Req}.
 reply_with_logoutresp(SP, IDP, Status, RelayState, Req) ->
     SignedXml = SP:generate_logout_response(IDP, Status),
     reply_with_req(IDP, SignedXml, RelayState, Req).
@@ -71,9 +71,9 @@ reply_with_req(IDP, SignedXml, RelayState, Req) ->
 %% @doc Validate and parse a LogoutRequest or LogoutResponse
 %%
 %% This function handles both REDIRECT and POST bindings.
--spec validate_logout(SP :: esaml:sp(), Req) -> 
-        {request, esaml:logoutreq(), RelayState::binary(), Req} | 
-        {response, esaml:logoutresp(), RelayState::binary(), Req} | 
+-spec validate_logout(esaml:sp(), Req) ->
+        {request, esaml:logoutreq(), RelayState::binary(), Req} |
+        {response, esaml:logoutresp(), RelayState::binary(), Req} |
         {error, Reason :: term(), Req}.
 validate_logout(SP, Req) ->
     {Method, Req} = cowboy_req:method(Req),
@@ -121,7 +121,7 @@ validate_logout(SP, SAMLEncoding, SAMLResponse, RelayState, Req2) ->
     end.
 
 %% @doc Reply to a Cowboy request with a Metadata payload
--spec reply_with_metadata(SP :: esaml:sp(), Req) -> {ok, Req}.
+-spec reply_with_metadata(esaml:sp(), Req) -> {ok, Req}.
 reply_with_metadata(SP, Req) ->
     SignedXml = SP:generate_metadata(),
     Metadata = xmerl:export([SignedXml], xmerl_xml),
@@ -130,8 +130,8 @@ reply_with_metadata(SP, Req) ->
 %% @doc Validate and parse an Assertion inside a SAMLResponse
 %%
 %% This function handles only POST bindings.
--spec validate_assertion(SP :: esaml:sp(), Req) -> 
-        {ok, Assertion :: esaml:assertion(), RelayState :: binary(), Req} | 
+-spec validate_assertion(esaml:sp(), Req) ->
+        {ok, esaml:assertion(), RelayState :: binary(), Req} |
         {error, Reason :: term(), Req}.
 validate_assertion(SP, Req) ->
     validate_assertion(SP, fun(_A, _Digest) -> ok end, Req).
@@ -141,8 +141,8 @@ validate_assertion(SP, Req) ->
 %% This function handles only POST bindings.
 %%
 %% For the signature of DuplicateFun, see esaml_sp:validate_assertion/3
--spec validate_assertion(SP :: esaml:sp(), DuplicateFun :: fun(), Req) -> 
-        {ok, Assertion :: esaml:assertion(), RelayState :: binary(), Req} | 
+-spec validate_assertion(esaml:sp(), esaml_sp:dupe_fun(), Req) ->
+        {ok, esaml:assertion(), RelayState :: binary(), Req} |
         {error, Reason :: term(), Req}.
 validate_assertion(SP, DuplicateFun, Req) ->
     {ok, PostVals, Req2} = cowboy_req:body_qs(Req, [{length, 128000}]),

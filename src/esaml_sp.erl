@@ -17,7 +17,12 @@
 -export([generate_logout_request/3, generate_logout_response/3]).
 -export([validate_logout_request/2, validate_logout_response/2]).
 
+-type xml() :: #xmlElement{} | #xmlDocument{}.
+-type dupe_fun() :: fun((esaml:assertion(), Digest :: binary()) -> ok | term()).
+-export_type([dupe_fun/0]).
+
 %% @private
+-spec add_xml_id(xml()) -> xml().
 add_xml_id(Xml) ->
     Xml#xmlElement{attributes = Xml#xmlElement.attributes ++ [
         #xmlAttribute{name = 'ID',
@@ -59,7 +64,7 @@ generate_logout_request(IdpURL, NameID, SP = #esaml_sp{metadata_uri = MetaURI}) 
     end.
 
 %% @doc Return a LogoutResponse as an XML element
--spec generate_logout_response(IdpUR :: string(), Status :: esaml:status_code(), esaml:sp()) -> #xmlElement{}.
+-spec generate_logout_response(IdpURL :: string(), esaml:status_code(), esaml:sp()) -> #xmlElement{}.
 generate_logout_response(IdpURL, Status, SP = #esaml_sp{metadata_uri = MetaURI}) ->
     Now = erlang:localtime_to_universaltime(erlang:localtime()),
     Stamp = esaml_util:datetime_to_saml(Now),
@@ -110,8 +115,8 @@ setup(SP = #esaml_sp{trusted_fingerprints = FPs, metadata_uri = MetaURI,
     end.
 
 %% @doc Validate and parse a LogoutRequest element
--spec validate_logout_request(Xml :: #xmlElement{} | #xmlDocument{}, esaml:sp()) ->
-        {ok, Request :: esaml:logoutreq()} | {error, Reason :: term()}.
+-spec validate_logout_request(xml(), esaml:sp()) ->
+        {ok, esaml:logoutreq()} | {error, Reason :: term()}.
 validate_logout_request(Xml, SP = #esaml_sp{}) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
@@ -141,8 +146,8 @@ validate_logout_request(Xml, SP = #esaml_sp{}) ->
     ], Xml).
 
 %% @doc Validate and parse a LogoutResponse element
--spec validate_logout_response(Xml :: #xmlElement{} | #xmlDocument{}, esaml:sp()) ->
-        {ok, Response :: esaml:logoutresp()} | {error, Reason :: term()}.
+-spec validate_logout_response(xml(), esaml:sp()) ->
+        {ok, esaml:logoutresp()} | {error, Reason :: term()}.
 validate_logout_response(Xml, SP = #esaml_sp{}) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'},
@@ -177,17 +182,17 @@ validate_logout_response(Xml, SP = #esaml_sp{}) ->
     ], Xml).
 
 %% @doc Validate and decode an assertion envelope in parsed XML
--spec validate_assertion(Xml :: #xmlElement{} | #xmlDocument{}, esaml:sp()) ->
-        {ok, Assertion :: esaml:assertion()} | {error, Reason :: term()}.
+-spec validate_assertion(xml(), esaml:sp()) ->
+        {ok, esaml:assertion()} | {error, Reason :: term()}.
 validate_assertion(Xml, SP = #esaml_sp{}) ->
     validate_assertion(Xml, fun(_A, _Digest) -> ok end, SP).
 
 %% @doc Validate and decode an assertion envelope in parsed XML
 %%
-%% The DuplicateFun should have signature fun(#esaml_assertion{}, Digest :: binary()) ->
-%% ok | term(). It is intended to detect duplicate assertions in the case of a replay attack.
--spec validate_assertion(Xml :: #xmlElement{} | #xmlDocument{}, DuplicateFun :: fun(), esaml:sp()) ->
-        {ok, Assertion :: esaml:assertion()} | {error, Reason :: term()}.
+%% The dupe_fun argument is intended to detect duplicate assertions
+%% in the case of a replay attack.
+-spec validate_assertion(xml(), dupe_fun(), esaml:sp()) ->
+        {ok, esaml:assertion()} | {error, Reason :: term()}.
 validate_assertion(Xml, DuplicateFun, SP = #esaml_sp{}) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
