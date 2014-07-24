@@ -14,23 +14,25 @@
 -include_lib("xmerl/include/xmerl.hrl").
 -define(deflate, <<"urn:oasis:names:tc:SAML:2.0:bindings:URL-Encoding:DEFLATE">>).
 
--type uri() :: binary().
+-type uri() :: binary() | string().
 -type html_doc() :: binary().
+-type xml() :: #xmlElement{} | #xmlDocument{}.
 
 %% @private
+-spec xml_payload_type(xml()) -> binary().
 xml_payload_type(Xml) ->
     case Xml of
         #xmlDocument{content = [#xmlElement{name = Atom}]} ->
             case lists:suffix("Response", atom_to_list(Atom)) of
-                true -> "SAMLResponse";
-                _ -> "SAMLRequest"
+                true -> <<"SAMLResponse">>;
+                _ -> <<"SAMLRequest">>
             end;
         #xmlElement{name = Atom} ->
             case lists:suffix("Response", atom_to_list(Atom)) of
-                true -> "SAMLResponse";
-                _ -> "SAMLRequest"
+                true -> <<"SAMLResponse">>;
+                _ -> <<"SAMLRequest">>
             end;
-        _ -> "SAMLRequest"
+        _ -> <<"SAMLRequest">>
     end.
 
 %% @doc Unpack and parse a SAMLResponse with given encoding
@@ -51,7 +53,7 @@ decode_response(_, SAMLResponse) ->
 %% @doc Encode a SAMLRequest (or SAMLResponse) as an HTTP-REDIRECT binding
 %%
 %% Returns the URI that should be the target of redirection.
--spec encode_http_redirect(IDPTarget :: uri(), SignedXml :: #xmlDocument{}, RelayState :: binary()) -> uri().
+-spec encode_http_redirect(IDPTarget :: uri(), SignedXml :: xml(), RelayState :: binary()) -> uri().
 encode_http_redirect(IdpTarget, SignedXml, RelayState) ->
     Type = xml_payload_type(SignedXml),
 	Req = lists:flatten(xmerl:export([SignedXml], xmerl_xml)),
@@ -63,14 +65,14 @@ encode_http_redirect(IdpTarget, SignedXml, RelayState) ->
 %%
 %% Returns the HTML document to be sent to the browser, containing a
 %% form and javascript to automatically submit it.
--spec encode_http_post(IDPTarget :: uri(), SignedXml :: #xmlDocument{}, RelayState :: binary()) -> html_doc().
+-spec encode_http_post(IDPTarget :: uri(), SignedXml :: xml(), RelayState :: binary()) -> html_doc().
 encode_http_post(IdpTarget, SignedXml, RelayState) ->
     Type = xml_payload_type(SignedXml),
 	Req = lists:flatten(xmerl:export([SignedXml], xmerl_xml)),
-    generate_post_html(list_to_binary(Type), IdpTarget, base64:encode(Req), RelayState).
+    generate_post_html(Type, IdpTarget, base64:encode(Req), RelayState).
 
 generate_post_html(Type, Dest, Req, RelayState) ->
-    <<"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">
+    iolist_to_binary([<<"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">
 <html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">
 <head>
 <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" />
@@ -80,10 +82,10 @@ generate_post_html(Type, Dest, Req, RelayState) ->
 <noscript>
 <p><strong>Note:</strong> Since your browser does not support JavaScript, you must press the button below once to proceed.</p>
 </noscript>
-<form method=\"post\" action=\"",Dest/binary,"\">
-<input type=\"hidden\" name=\"",Type/binary,"\" value=\"",Req/binary,"\" />
-<input type=\"hidden\" name=\"RelayState\" value=\"",RelayState/binary,"\" />
+<form method=\"post\" action=\"">>,Dest,<<"\">
+<input type=\"hidden\" name=\"">>,Type,<<"\" value=\"">>,Req,<<"\" />
+<input type=\"hidden\" name=\"RelayState\" value=\"">>,RelayState,<<"\" />
 <noscript><input type=\"submit\" value=\"Submit\" /></noscript>
 </form>
 </body>
-</html>">>.
+</html>">>]).
