@@ -8,9 +8,10 @@
   {applications, [
                   kernel,
                   stdlib,
-                  lager,
                   xmerl,
-                  cowboy
+                  cowboy,
+                  ssl,
+                  inets
                  ]},
   {mod, { esaml, []}},
   {env, [

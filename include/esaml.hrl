@@ -8,29 +8,93 @@
 
 %% data types / message records
 
--record(esaml_org, {name :: string(), displayname :: string(), url :: string()}).
 
--record(esaml_contact, {name :: string(), email :: string()}).
+-record(esaml_org, {
+	name = "" :: esaml:localized_string(),
+	displayname = "" :: esaml:localized_string(),
+	url = "" :: esaml:localized_string()}).
 
--record(esaml_sp_metadata, {org :: #esaml_org{},
-	tech :: #esaml_contact{},
-	signed_requests :: boolean(),
-	signed_assertions :: boolean(),
-	certificate :: binary(),
-	entity_id :: string(),
-	consumer_location :: string()}).
+-record(esaml_contact, {
+	name = "" :: string(),
+	email = "" :: string()}).
 
--record(esaml_authnreq, {issue_instant :: string(),
-	destination :: string(), issuer :: string(), consumer_location :: string()}).
+-record(esaml_sp_metadata, {
+	org = #esaml_org{} :: esaml:org(),
+	tech = #esaml_contact{} :: esaml:contact(),
+	signed_requests = true :: boolean(),
+	signed_assertions = true :: boolean(),
+	certificate :: binary() | undefined,
+	entity_id = "" :: string(),
+	consumer_location = "" :: string(),
+	logout_location :: string() | undefined}).
 
--record(esaml_subject, {name :: string(),
-	confirmation_method = bearer :: atom(), notonorafter :: string()}).
+-record(esaml_idp_metadata, {
+	org = #esaml_org{} :: esaml:org(),
+	tech = #esaml_contact{} :: esaml:contact(),
+	signed_requests = true :: boolean(),
+	certificate :: binary() | undefined,
+	entity_id = "" :: string(),
+	login_location = "" :: string(),
+	logout_location :: string() | undefined,
+	name_format = unknown :: esaml:name_format()}).
 
--record(esaml_assertion, {version = "2.0" :: string(), issue_instant :: string(), recipient :: string(), issuer :: string(), subject :: #esaml_subject{}, conditions = [], attributes = []}).
+-record(esaml_authnreq, {
+	version = "2.0" :: esaml:version(),
+	issue_instant = "" :: esaml:datetime(),
+	destination = "" :: string(),
+	issuer = "" :: string(),
+	consumer_location = "" :: string()}).
 
--type esaml_status_code() :: success | request_error | response_error | bad_version | authn_failed | bad_attr | denied | bad_binding.
--record(esaml_response, {version = "2.0" :: string(), issue_instant :: string(), destination :: string(), issuer :: string(), status :: esaml_status_code(), assertion :: #esaml_assertion{}}).
+-record(esaml_subject, {
+	name = "" :: string(),
+	confirmation_method = bearer :: atom(),
+	notonorafter = "" :: esaml:datetime()}).
+
+-record(esaml_assertion, {
+	version = "2.0" :: esaml:version(),
+	issue_instant = "" :: esaml:datetime(),
+	recipient = "" :: string(),
+	issuer = "" :: string(),
+	subject = "" :: esaml:subject(),
+	conditions = [] :: esaml:conditions(),
+	attributes = [] :: proplists:proplist()}).
+
+-record(esaml_logoutreq, {
+	version = "2.0" :: esaml:version(),
+	issue_instant = "" :: esaml:datetime(),
+	destination = "" :: string(),
+	issuer = "" :: string(),
+	name = "" :: string(),
+	reason = user :: esaml:logout_reason()}).
+
+-record(esaml_logoutresp, {
+	version = "2.0" :: esaml:version(),
+	issue_instant = "" :: esaml:datetime(),
+	destination = "" :: string(),
+	issuer = "" :: string(),
+	status = success :: esaml:status_code()}).
+
+-record(esaml_response, {
+	version = "2.0" :: esaml:version(),
+	issue_instant = "" :: esaml:datetime(),
+	destination = "" :: string(),
+	issuer = "" :: string(),
+	status = success :: esaml:status_code(),
+	assertion = #esaml_assertion{} :: esaml:assertion()}).
 
 %% state records
 
--record(esaml_sp, {module, modargs = [], org = #esaml_org{}, tech = #esaml_contact{}, key, certificate, sign_requests = false, sign_assertions = true, sign_metadata = false, trusted_fingerprints = [], metadata_uri, consume_uri}).
+-record(esaml_sp, {
+	org = #esaml_org{} :: esaml:org(),
+	tech = #esaml_contact{} :: esaml:contact(),
+	key :: binary() | undefined,
+	certificate :: binary() | undefined,
+	sp_sign_requests = false :: boolean(),
+	idp_signs_assertions = true :: boolean(),
+	idp_signs_envelopes = true :: boolean(),
+	idp_signs_logout_requests = true :: boolean(),
+	sp_sign_metadata = false :: boolean(),
+	trusted_fingerprints = [] :: [string() | binary()],
+	metadata_uri = "" :: string(),
+	consume_uri = "" :: string(),
+	logout_uri :: string() | undefined}).
