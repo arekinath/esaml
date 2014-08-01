@@ -31,15 +31,16 @@
 -type logoutresp() :: #esaml_logoutresp{}.
 -type response() :: #esaml_response{}.
 -type sp() :: #esaml_sp{}.
+-type saml_record() :: org() | contact() | sp_metadata() | idp_metadata() | authnreq() | subject() | assertion() | logoutreq() | logoutresp() | response().
 
 -export_type([org/0, contact/0, sp_metadata/0, idp_metadata/0,
     authnreq/0, subject/0, assertion/0, logoutreq/0,
-    logoutresp/0, response/0, sp/0]).
+    logoutresp/0, response/0, sp/0, saml_record/0]).
 
 -type localized_string() :: string() | [{Locale :: atom(), LocalizedString :: string()}].
 -type name_format() :: email | x509 | windows | krb | persistent | transient | unknown.
 -type logout_reason() :: user | admin.
--type status_code() :: success | request_error | response_error | bad_version | authn_failed | bad_attr | denied | bad_binding.
+-type status_code() :: success | request_error | response_error | bad_version | authn_failed | bad_attr | denied | bad_binding | unknown.
 -type version() :: string().
 -type datetime() :: string() | binary().
 -type condition() :: {not_before, esaml:datetime()} | {not_on_or_after, esaml:datetime()} | {audience, string()}.
@@ -74,30 +75,20 @@ config(N, D) ->
         _ -> D
     end.
 
-response_map_status_code(R = #esaml_response{status = Code}) ->
-    R#esaml_response{status = status_code_map(Code)}.
-logoutresp_map_status_code(R = #esaml_logoutresp{status = Code}) ->
-    R#esaml_logoutresp{status = status_code_map(Code)}.
-logoutreq_map_reason(R = #esaml_logoutreq{reason = undefined}) ->
-    R;
-logoutreq_map_reason(R = #esaml_logoutreq{reason = Urn}) ->
-    R#esaml_logoutreq{reason = logout_reason_map(Urn)}.
-subject_map_method(R = #esaml_subject{confirmation_method = Method}) ->
-    R#esaml_subject{confirmation_method = subject_method_map(Method)}.
-idpmeta_map_nameid(R = #esaml_idp_metadata{name_format = NF}) ->
-    R#esaml_idp_metadata{name_format = nameid_map(NF)}.
-
+-spec nameid_map(string()) -> name_format().
 nameid_map("urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress") -> email;
 nameid_map("urn:oasis:names:tc:SAML:1.1:nameid-format:X509SubjectName") -> x509;
 nameid_map("urn:oasis:names:tc:SAML:1.1:nameid-format:WindowsDomainQualifiedName") -> windows;
 nameid_map("urn:oasis:names:tc:SAML:2.0:nameid-format:kerberos") -> krb;
 nameid_map("urn:oasis:names:tc:SAML:2.0:nameid-format:persistent") -> persistent;
 nameid_map("urn:oasis:names:tc:SAML:2.0:nameid-format:transient") -> transient;
-nameid_map(_) -> unknown.
+nameid_map(S) when is_list(S) -> unknown.
 
+-spec subject_method_map(string()) -> bearer | unknown.
 subject_method_map("urn:oasis:names:tc:SAML:2.0:cm:bearer") -> bearer;
 subject_method_map(_) -> unknown.
 
+-spec status_code_map(string()) -> status_code() | atom().
 status_code_map("urn:oasis:names:tc:SAML:2.0:status:Success") -> success;
 status_code_map("urn:oasis:names:tc:SAML:2.0:status:VersionMismatch") -> bad_version;
 status_code_map("urn:oasis:names:tc:SAML:2.0:status:AuthnFailed") -> authn_failed;
@@ -105,8 +96,9 @@ status_code_map("urn:oasis:names:tc:SAML:2.0:status:InvalidAttrNameOrValue") -> 
 status_code_map("urn:oasis:names:tc:SAML:2.0:status:RequestDenied") -> denied;
 status_code_map("urn:oasis:names:tc:SAML:2.0:status:UnsupportedBinding") -> bad_binding;
 status_code_map(Urn = "urn:" ++ _) -> list_to_atom(lists:last(string:tokens(Urn, ":")));
-status_code_map(_) -> unknown.
+status_code_map(S) when is_list(S) -> unknown.
 
+-spec rev_status_code_map(status_code()) -> string().
 rev_status_code_map(success) -> "urn:oasis:names:tc:SAML:2.0:status:Success";
 rev_status_code_map(bad_version) -> "urn:oasis:names:tc:SAML:2.0:status:VersionMismatch";
 rev_status_code_map(authn_failed) -> "urn:oasis:names:tc:SAML:2.0:status:AuthnFailed";
@@ -115,14 +107,16 @@ rev_status_code_map(denied) -> "urn:oasis:names:tc:SAML:2.0:status:RequestDenied
 rev_status_code_map(bad_binding) -> "urn:oasis:names:tc:SAML:2.0:status:UnsupportedBinding";
 rev_status_code_map(_) -> error(bad_status_code).
 
+-spec logout_reason_map(string()) -> logout_reason().
 logout_reason_map("urn:oasis:names:tc:SAML:2.0:logout:user") -> user;
 logout_reason_map("urn:oasis:names:tc:SAML:2.0:logout:admin") -> admin;
-logout_reason_map(_) -> unknown.
+logout_reason_map(S) when is_list(S) -> unknown.
 
+-spec rev_logout_reason_map(logout_reason()) -> string().
 rev_logout_reason_map(user) -> "urn:oasis:names:tc:SAML:2.0:logout:user";
-rev_logout_reason_map(admin) -> "urn:oasis:names:tc:SAML:2.0:logout:admin";
-rev_logout_reason_map(_) -> error(bad_reason).
+rev_logout_reason_map(admin) -> "urn:oasis:names:tc:SAML:2.0:logout:admin".
 
+-spec common_attrib_map(string()) -> atom().
 common_attrib_map("urn:oid:2.16.840.1.113730.3.1.3") -> employeeNumber;
 common_attrib_map("urn:oid:1.3.6.1.4.1.5923.1.1.1.6") -> eduPersonPrincipalName;
 common_attrib_map("urn:oid:0.9.2342.19200300.100.1.3") -> mail;
@@ -137,65 +131,12 @@ common_attrib_map("urn:oid:2.16.840.1.113730.3.1.4") -> employeeType;
 common_attrib_map("urn:oid:0.9.2342.19200300.100.1.1") -> uid;
 common_attrib_map("urn:oid:2.5.4.4") -> surName;
 common_attrib_map(Uri = "http://" ++ _) -> list_to_atom(lists:last(string:tokens(Uri, "/")));
-common_attrib_map(Other) -> list_to_atom(Other).
+common_attrib_map(Other) when is_list(Other) -> list_to_atom(Other).
 
--define(xpath_attr_required(XPath, Record, Field, Error),
-    fun(Resp) ->
-        case xmerl_xpath:string(XPath, Xml, [{namespace, Ns}]) of
-            [#xmlAttribute{value = V}] -> Resp#Record{Field = V};
-            _ -> {error, Error}
-        end
-    end).
--define(xpath_attr(XPath, Record, Field),
-    fun(Resp) ->
-        case xmerl_xpath:string(XPath, Xml, [{namespace, Ns}]) of
-            [#xmlAttribute{value = V}] -> Resp#Record{Field = V};
-            _ -> Resp
-        end
-    end).
--define(xpath_text(XPath, Record, Field),
-    fun(Resp) ->
-        case xmerl_xpath:string(XPath, Xml, [{namespace, Ns}]) of
-            [#xmlText{value = V}] -> Resp#Record{Field = V};
-            _ -> Resp
-        end
-    end).
--define(xpath_text_append(XPath, Record, Field, Sep),
-    fun(Resp) ->
-        case xmerl_xpath:string(XPath, Xml, [{namespace, Ns}]) of
-            [#xmlText{value = V}] -> Resp#Record{Field = Resp#Record.Field ++ Sep ++ V};
-            _ -> Resp
-        end
-    end).
--define(xpath_text_required(XPath, Record, Field, Error),
-    fun(Resp) ->
-        case xmerl_xpath:string(XPath, Xml, [{namespace, Ns}]) of
-            [#xmlText{value = V}] -> Resp#Record{Field = V};
-            _ -> {error, Error}
-        end
-    end).
--define(xpath_binary(XPath, Record, Field),
-    fun(Resp) ->
-        case xmerl_xpath:string(XPath, Xml, [{namespace, Ns}]) of
-            [#xmlText{value = V}] -> Resp#Record{Field = base64:decode(list_to_binary(V))};
-            _ -> Resp
-        end
-    end).
--define(xpath_recurse(XPath, Record, Field, F),
-    fun(Resp) ->
-        case xmerl_xpath:string(XPath, Xml, [{namespace, Ns}]) of
-            [E = #xmlElement{}] ->
-                case F(E) of
-                    {error, V} -> {error, V};
-                    {ok, V} -> Resp#Record{Field = V};
-                    _ -> {error, bad_recurse}
-                end;
-            _ -> Resp
-        end
-    end).
+-include("xmerl_xpath_macros.hrl").
 
 %% @private
--spec decode_idp_metadata(Xml :: #xmlElement{}) -> #esaml_idp_metadata{}.
+-spec decode_idp_metadata(Xml :: #xmlElement{}) -> {ok, #esaml_idp_metadata{}} | {error, term()}.
 decode_idp_metadata(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'},
@@ -208,15 +149,14 @@ decode_idp_metadata(Xml) ->
         ?xpath_attr("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleLogoutService/@Location",
             esaml_idp_metadata, logout_location),
         ?xpath_text("/md:EntityDescriptor/md:IDPSSODescriptor/md:NameIDFormat/text()",
-            esaml_idp_metadata, name_format),
-        fun idpmeta_map_nameid/1,
-        ?xpath_binary("/md:EntityDescriptor/md:IDPSSODescriptor/md:KeyDescriptor[@use='signing']/ds:KeyInfo/ds:X509Data/ds:X509Certificate/text()", esaml_idp_metadata, certificate),
+            esaml_idp_metadata, name_format, fun nameid_map/1),
+        ?xpath_text("/md:EntityDescriptor/md:IDPSSODescriptor/md:KeyDescriptor[@use='signing']/ds:KeyInfo/ds:X509Data/ds:X509Certificate/text()", esaml_idp_metadata, certificate, fun(X) -> base64:decode(list_to_binary(X)) end),
         ?xpath_recurse("/md:EntityDescriptor/md:ContactPerson[@contactType='technical']", esaml_idp_metadata, tech, decode_contact),
         ?xpath_recurse("/md:EntityDescriptor/md:Organization", esaml_idp_metadata, org, decode_org)
     ], #esaml_idp_metadata{}).
 
 %% @private
--spec decode_org(Xml :: #xmlElement{}) -> #esaml_org{}.
+-spec decode_org(Xml :: #xmlElement{}) -> {ok, #esaml_org{}} | {error, term()}.
 decode_org(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'},
@@ -228,7 +168,7 @@ decode_org(Xml) ->
     ], #esaml_org{}).
 
 %% @private
--spec decode_contact(Xml :: #xmlElement{}) -> #esaml_contact{}.
+-spec decode_contact(Xml :: #xmlElement{}) -> {ok, #esaml_contact{}} | {error, term()}.
 decode_contact(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'},
@@ -240,7 +180,7 @@ decode_contact(Xml) ->
     ], #esaml_contact{}).
 
 %% @private
--spec decode_logout_request(Xml :: #xmlElement{}) -> #esaml_logoutreq{}.
+-spec decode_logout_request(Xml :: #xmlElement{}) -> {ok, #esaml_logoutreq{}} | {error, term()}.
 decode_logout_request(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
@@ -249,27 +189,25 @@ decode_logout_request(Xml) ->
         ?xpath_attr_required("/samlp:LogoutRequest/@IssueInstant", esaml_logoutreq, issue_instant, bad_response),
         ?xpath_text_required("/samlp:LogoutRequest/saml:NameID/text()", esaml_logoutreq, name, bad_name),
         ?xpath_attr("/samlp:LogoutRequest/@Destination", esaml_logoutreq, destination),
-        ?xpath_attr("/samlp:LogoutRequest/@Reason", esaml_logoutreq, reason),
-        fun logoutreq_map_reason/1,
+        ?xpath_attr("/samlp:LogoutRequest/@Reason", esaml_logoutreq, reason, fun logout_reason_map/1),
         ?xpath_text("/samlp:LogoutRequest/saml:Issuer/text()", esaml_logoutreq, issuer)
     ], #esaml_logoutreq{}).
 
 %% @private
--spec decode_logout_response(Xml :: #xmlElement{}) -> #esaml_logoutresp{}.
+-spec decode_logout_response(Xml :: #xmlElement{}) -> {ok, #esaml_logoutresp{}} | {error, term()}.
 decode_logout_response(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
     esaml_util:threaduntil([
         ?xpath_attr_required("/samlp:LogoutResponse/@Version", esaml_logoutresp, version, bad_version),
         ?xpath_attr_required("/samlp:LogoutResponse/@IssueInstant", esaml_logoutresp, issue_instant, bad_response),
-        ?xpath_attr_required("/samlp:LogoutResponse/samlp:Status/samlp:StatusCode/@Value", esaml_logoutresp, status, bad_response),
+        ?xpath_attr_required("/samlp:LogoutResponse/samlp:Status/samlp:StatusCode/@Value", esaml_logoutresp, status, fun status_code_map/1, bad_response),
         ?xpath_attr("/samlp:LogoutResponse/@Destination", esaml_logoutresp, destination),
-        ?xpath_text("/samlp:LogoutResponse/saml:Issuer/text()", esaml_logoutresp, issuer),
-        fun logoutresp_map_status_code/1
+        ?xpath_text("/samlp:LogoutResponse/saml:Issuer/text()", esaml_logoutresp, issuer)
     ], #esaml_logoutresp{}).
 
 %% @private
--spec decode_response(Xml :: #xmlElement{}) -> #esaml_response{}.
+-spec decode_response(Xml :: #xmlElement{}) -> {ok, #esaml_response{}} | {error, term()}.
 decode_response(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
@@ -278,13 +216,12 @@ decode_response(Xml) ->
         ?xpath_attr_required("/samlp:Response/@IssueInstant", esaml_response, issue_instant, bad_response),
         ?xpath_attr("/samlp:Response/@Destination", esaml_response, destination),
         ?xpath_text("/samlp:Response/saml:Issuer/text()", esaml_response, issuer),
-        ?xpath_attr("/samlp:Response/samlp:Status/samlp:StatusCode/@Value", esaml_response, status),
-        fun response_map_status_code/1,
+        ?xpath_attr("/samlp:Response/samlp:Status/samlp:StatusCode/@Value", esaml_response, status, fun status_code_map/1),
         ?xpath_recurse("/samlp:Response/saml:Assertion", esaml_response, assertion, decode_assertion)
     ], #esaml_response{}).
 
 %% @private
--spec decode_assertion(Xml :: #xmlElement{}) -> #esaml_assertion{}.
+-spec decode_assertion(Xml :: #xmlElement{}) -> {ok, #esaml_assertion{}} | {error, term()}.
 decode_assertion(Xml) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
@@ -298,15 +235,16 @@ decode_assertion(Xml) ->
         ?xpath_recurse("/saml:Assertion/saml:AttributeStatement", esaml_assertion, attributes, decode_assertion_attributes)
     ], #esaml_assertion{}).
 
+-spec decode_assertion_subject(#xmlElement{}) -> {ok, #esaml_subject{}} | {error, term()}.
 decode_assertion_subject(Xml) ->
     Ns = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
     esaml_util:threaduntil([
         ?xpath_text("/saml:Subject/saml:NameID/text()", esaml_subject, name),
-        ?xpath_attr("/saml:Subject/saml:SubjectConfirmation/@Method", esaml_subject, confirmation_method),
-        ?xpath_attr("/saml:Subject/saml:SubjectConfirmation/saml:SubjectConfirmationData/@NotOnOrAfter", esaml_subject, notonorafter),
-        fun subject_map_method/1
+        ?xpath_attr("/saml:Subject/saml:SubjectConfirmation/@Method", esaml_subject, confirmation_method, fun subject_method_map/1),
+        ?xpath_attr("/saml:Subject/saml:SubjectConfirmation/saml:SubjectConfirmationData/@NotOnOrAfter", esaml_subject, notonorafter)
     ], #esaml_subject{}).
 
+-spec decode_assertion_conditions(#xmlElement{}) -> {ok, conditions()} | {error, term()}.
 decode_assertion_conditions(Xml) ->
     Ns = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
     esaml_util:threaduntil([
@@ -327,6 +265,7 @@ decode_assertion_conditions(Xml) ->
         end
     ], []).
 
+-spec decode_assertion_attributes(#xmlElement{}) -> {ok, [{atom(), string()}]} | {error, term()}.
 decode_assertion_attributes(Xml) ->
     Ns = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
     Attrs = xmerl_xpath:string("/saml:AttributeStatement/saml:Attribute", Xml, [{namespace, Ns}]),
@@ -355,12 +294,11 @@ stale_time(A) ->
     esaml_util:thread([
         fun(T) ->
             case A#esaml_assertion.subject of
-                #esaml_subject{notonorafter = undefined} -> T;
+                #esaml_subject{notonorafter = ""} -> T;
                 #esaml_subject{notonorafter = Restrict} ->
                     Secs = calendar:datetime_to_gregorian_seconds(
                         esaml_util:saml_to_datetime(Restrict)),
-                    if (Secs < T) -> Secs; true -> T end;
-                _ -> T
+                    if (Secs < T) -> Secs; true -> T end
             end
         end,
         fun(T) ->
@@ -445,7 +383,7 @@ lang_elems(BaseTag, Val) ->
 
 %% @doc Convert a SAML request/metadata record into XML
 %% @private
--spec to_xml(record()) -> #xmlElement{}.
+-spec to_xml(saml_record()) -> #xmlElement{}.
 to_xml(#esaml_authnreq{version = V, issue_instant = Time, destination = Dest, issuer = Issuer, consumer_location = Consumer}) ->
     Ns = #xmlNamespace{nodes = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
                                 {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
@@ -595,7 +533,7 @@ to_xml(_) -> error("unknown record").
 decode_response_test() ->
     {Doc, _} = xmerl_scan:string("<samlp:Response xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" Version=\"2.0\" IssueInstant=\"2013-01-01T01:01:01Z\" Destination=\"foo\"></samlp:Response>", [{namespace_conformant, true}]),
     Resp = decode_response(Doc),
-    {ok, #esaml_response{issue_instant = "2013-01-01T01:01:01Z", destination = "foo", status = unknown}} = Resp.
+    ?assertMatch({ok, #esaml_response{issue_instant = "2013-01-01T01:01:01Z", destination = "foo", status = unknown}}, Resp).
 
 decode_response_no_version_test() ->
     {Doc, _} = xmerl_scan:string("<samlp:Response xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" IssueInstant=\"2013-01-01T01:01:01Z\" Destination=\"foo\"></samlp:Response>", [{namespace_conformant, true}]),

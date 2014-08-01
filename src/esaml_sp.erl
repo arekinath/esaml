@@ -102,8 +102,8 @@ generate_metadata(SP = #esaml_sp{org = Org, tech = Tech}) ->
 setup(SP = #esaml_sp{trusted_fingerprints = FPs, metadata_uri = MetaURI,
                      consume_uri = ConsumeURI}) ->
     Fingerprints = esaml_util:convert_fingerprints(FPs),
-    case MetaURI of undefined -> error("must specify metadata URI"); _ -> ok end,
-    case ConsumeURI of undefined -> error("must specify consume URI"); _ -> ok end,
+    case MetaURI of "" -> error("must specify metadata URI"); _ -> ok end,
+    case ConsumeURI of "" -> error("must specify consume URI"); _ -> ok end,
     if (SP#esaml_sp.key =:= undefined) andalso (SP#esaml_sp.sp_sign_requests) ->
         error("must specify a key to sign requests");
     true -> ok

@@ -69,6 +69,7 @@ thread([F | Rest], Acc) ->
     thread(Rest, F(Acc)).
 
 %% @private
+-spec threaduntil([fun((Acc :: term()) -> {error, term()} | {stop, term()} | term())], InitAcc::term()) -> {ok, term()} | {error, term()}.
 threaduntil([], Acc) -> {ok, Acc};
 threaduntil([F | Rest], Acc) ->
     case (catch F(Acc)) of

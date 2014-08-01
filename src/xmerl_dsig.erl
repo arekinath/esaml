@@ -46,8 +46,8 @@ strip(#xmlElement{content = Kids} = Elem) ->
 %%      the element with the signature added.
 %%
 %% Don't use "ds" as a namespace prefix in the envelope document, or things will go baaaad.
--spec sign(Element :: #xmlElement{}, PrivateKey :: rsa_private_key(), CertBin :: binary()) -> #xmlElement{}.
-sign(ElementIn, PrivateKey, CertBin) ->
+-spec sign(Element :: #xmlElement{}, PrivateKey :: #'RSAPrivateKey'{}, CertBin :: binary()) -> #xmlElement{}.
+sign(ElementIn, PrivateKey = #'RSAPrivateKey'{}, CertBin) when is_binary(CertBin) ->
     % get rid of any previous signature
     ElementStrip = strip(ElementIn),
 

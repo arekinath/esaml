@@ -8,6 +8,7 @@
 
 %% data types / message records
 
+-include_lib("public_key/include/public_key.hrl").
 
 -record(esaml_org, {
 	name = "" :: esaml:localized_string(),
@@ -55,7 +56,7 @@
 	issue_instant = "" :: esaml:datetime(),
 	recipient = "" :: string(),
 	issuer = "" :: string(),
-	subject = "" :: esaml:subject(),
+	subject = #esaml_subject{} :: esaml:subject(),
 	conditions = [] :: esaml:conditions(),
 	attributes = [] :: proplists:proplist()}).
 
@@ -72,14 +73,14 @@
 	issue_instant = "" :: esaml:datetime(),
 	destination = "" :: string(),
 	issuer = "" :: string(),
-	status = success :: esaml:status_code()}).
+	status = unknown :: esaml:status_code()}).
 
 -record(esaml_response, {
 	version = "2.0" :: esaml:version(),
 	issue_instant = "" :: esaml:datetime(),
 	destination = "" :: string(),
 	issuer = "" :: string(),
-	status = success :: esaml:status_code(),
+	status = unknown :: esaml:status_code(),
 	assertion = #esaml_assertion{} :: esaml:assertion()}).
 
 %% state records
@@ -87,7 +88,7 @@
 -record(esaml_sp, {
 	org = #esaml_org{} :: esaml:org(),
 	tech = #esaml_contact{} :: esaml:contact(),
-	key :: binary() | undefined,
+	key :: #'RSAPrivateKey'{} | undefined,
 	certificate :: binary() | undefined,
 	sp_sign_requests = false :: boolean(),
 	idp_signs_assertions = true :: boolean(),
