@@ -89,3 +89,8 @@ generate_post_html(Type, Dest, Req, RelayState) ->
 </form>
 </body>
 </html>">>]).
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+-endif.

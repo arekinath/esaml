@@ -234,3 +234,9 @@ validate_assertion(Xml, DuplicateFun, SP = #esaml_sp{}) ->
             end
         end
     ], Xml).
+
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+-endif.

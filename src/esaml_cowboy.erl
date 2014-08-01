@@ -160,4 +160,7 @@ validate_assertion(SP, DuplicateFun, Req) ->
             end
     end.
 
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
+-endif.
