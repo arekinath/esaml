@@ -246,4 +246,41 @@ build_nsinfo_test() ->
     E3Ns = E3#xmlElement{nsinfo = {"blah", "George"}, namespace = FooNs, content = [E2Ns]},
     E3Ns = build_nsinfo(FooNs, E3).
 
+-include("xmerl_xpath_macros.hrl").
+
+-record(b, {name, ctext}).
+
+xpath_attr_test() ->
+    {Xml, _} = xmerl_scan:string("<a><b name=\"foo\"><c name=\"bar\">hi</c></b><b name=\"foobar\"><c name=\"foofoo\"></c></b></a>", [{namespace_conformant, true}]),
+    Ns = [],
+    Fun = ?xpath_attr("/a/b[@name='foo']/c/@name", b, name),
+    Rec = Fun(#b{}),
+    ?assertMatch(#b{name = "bar"}, Rec),
+    Fun2 = ?xpath_attr("/a/b[@name='foobar']/c/@name", b, name),
+    Rec2 = Fun2(Rec),
+    ?assertMatch(#b{name = "foofoo"}, Rec2),
+    Fun3 = ?xpath_attr("/a/b[@name='bar']/c/@name", b, name),
+    Rec3 = Fun3(Rec2),
+    ?assertMatch(Rec2, Rec3).
+
+xpath_attr_trans_test() ->
+    {Xml, _} = xmerl_scan:string("<a><b name=\"foo\"><c name=\"bar\">hi</c></b><b name=\"foobar\"><c name=\"foofoo\"></c></b></a>", [{namespace_conformant, true}]),
+    Ns = [],
+    Fun = ?xpath_attr("/a/b[@name='foobar']/c/@name", b, name, fun(X) -> list_to_atom(X) end),
+    Rec = Fun(#b{}),
+    ?assertMatch(#b{name = foofoo}, Rec).
+
+xpath_text_test() ->
+    {Xml, _} = xmerl_scan:string("<a><b name=\"foo\"><c name=\"bar\">hi</c></b><b name=\"foobar\"><c name=\"foofoo\"></c></b></a>", [{namespace_conformant, true}]),
+    Ns = [],
+    Fun = ?xpath_text("/a/b[@name='foo']/c/text()", b, ctext),
+    Rec = Fun(#b{}),
+    ?assertMatch(#b{ctext = "hi"}, Rec),
+    Fun2 = ?xpath_text("/a/b[@name='foobar']/c/text()", b, ctext),
+    Rec2 = Fun2(Rec),
+    ?assertMatch(Rec, Rec2),
+    Fun3 = ?xpath_text("/a/b[@name='bar']/c/text()", b, name),
+    Rec3 = Fun3(Rec2),
+    ?assertMatch(Rec2, Rec3).
+
 -endif.
