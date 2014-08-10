@@ -57,8 +57,8 @@ decode_response(_, SAMLResponse) ->
 encode_http_redirect(IdpTarget, SignedXml, RelayState) ->
     Type = xml_payload_type(SignedXml),
 	Req = lists:flatten(xmerl:export([SignedXml], xmerl_xml)),
-    Param = edoc_lib:escape_uri(base64:encode_to_string(zlib:zip(Req))),
-    RelayStateEsc = edoc_lib:escape_uri(binary_to_list(RelayState)),
+    Param = http_uri:encode(base64:encode_to_string(zlib:zip(Req))),
+    RelayStateEsc = http_uri:encode(binary_to_list(RelayState)),
     iolist_to_binary([IdpTarget, "?SAMLEncoding=", ?deflate, "&", Type, "=", Param, "&RelayState=", RelayStateEsc]).
 
 %% @doc Encode a SAMLRequest (or SAMLResponse) as an HTTP-POST binding
