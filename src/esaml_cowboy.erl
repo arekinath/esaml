@@ -79,7 +79,7 @@ validate_logout(SP, Req) ->
     {Method, Req} = cowboy_req:method(Req),
     case Method of
         <<"POST">> ->
-            {ok, PostVals, Req2} = cowboy_req:body_qs(Req, [{length, 128000}]),
+            {ok, PostVals, Req2} = cowboy_req:body_qs(128000, Req),
             SAMLEncoding = proplists:get_value(<<"SAMLEncoding">>, PostVals),
             SAMLResponse = proplists:get_value(<<"SAMLResponse">>, PostVals,
                 proplists:get_value(<<"SAMLRequest">>, PostVals)),
@@ -145,7 +145,7 @@ validate_assertion(SP, Req) ->
         {ok, esaml:assertion(), RelayState :: binary(), Req} |
         {error, Reason :: term(), Req}.
 validate_assertion(SP, DuplicateFun, Req) ->
-    {ok, PostVals, Req2} = cowboy_req:body_qs(Req, [{length, 128000}]),
+    {ok, PostVals, Req2} = cowboy_req:body_qs(128000, Req),
     SAMLEncoding = proplists:get_value(<<"SAMLEncoding">>, PostVals),
     SAMLResponse = proplists:get_value(<<"SAMLResponse">>, PostVals),
     RelayState = proplists:get_value(<<"RelayState">>, PostVals),
