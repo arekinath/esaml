@@ -144,9 +144,9 @@ decode_idp_metadata(Xml) ->
           {"ds", 'http://www.w3.org/2000/09/xmldsig#'}],
     esaml_util:threaduntil([
         ?xpath_attr_required("/md:EntityDescriptor/@entityID", esaml_idp_metadata, entity_id, bad_entity),
-        ?xpath_attr_required("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleSignOnService/@Location",
+        ?xpath_attr_required("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleSignOnService[@Binding='urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST']/@Location",
             esaml_idp_metadata, login_location, missing_sso_location),
-        ?xpath_attr("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleLogoutService/@Location",
+        ?xpath_attr("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleLogoutService[@Binding='urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST']/@Location",
             esaml_idp_metadata, logout_location),
         ?xpath_text("/md:EntityDescriptor/md:IDPSSODescriptor/md:NameIDFormat/text()",
             esaml_idp_metadata, name_format, fun nameid_map/1),
