@@ -17,7 +17,7 @@
 -export([start_ets/0, check_dupe_ets/2]).
 -export([folduntil/3, thread/2, threaduntil/2]).
 -export([build_nsinfo/2]).
--export([load_private_key/1, load_certificate/1, load_metadata/2, load_metadata/1]).
+-export([load_private_key/1, load_certificate_chain/1, load_certificate/1, load_metadata/2, load_metadata/1]).
 -export([convert_fingerprints/1]).
 
 %% @doc Converts various ascii hex/base64 fingerprint formats to binary
@@ -134,16 +134,21 @@ load_private_key(Path) ->
             Key
     end.
 
-%% @doc Loads a certificate from a file on disk (or ETS memory cache)
 -spec load_certificate(Path :: string()) -> binary().
 load_certificate(CertPath) ->
+    [CertBin] = load_certificate_chain(CertPath),
+    CertBin.
+
+%% @doc Loads certificate chain from a file on disk (or ETS memory cache)
+-spec load_certificate_chain(Path :: string()) -> [binary()].
+load_certificate_chain(CertPath) ->
     case ets:lookup(esaml_certbin_cache, CertPath) of
-        [{_, CertBin}] -> CertBin;
+        [{_, CertChain}] -> CertChain;
         _ ->
             {ok, CertFile} = file:read_file(CertPath),
-            [{'Certificate', CertBin, not_encrypted}] = public_key:pem_decode(CertFile),
-            ets:insert(esaml_certbin_cache, {CertPath, CertBin}),
-            CertBin
+            CertChain = [CertBin || {'Certificate', CertBin, not_encrypted} <- public_key:pem_decode(CertFile)],
+            ets:insert(esaml_certbin_cache, {CertPath, CertChain}),
+            CertChain
     end.
 
 %% @doc Reads IDP metadata from a URL (or ETS memory cache) and validates the signature

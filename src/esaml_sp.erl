@@ -88,6 +88,7 @@ generate_metadata(SP = #esaml_sp{org = Org, tech = Tech}) ->
         signed_requests = SP#esaml_sp.sp_sign_requests,
         signed_assertions = SP#esaml_sp.idp_signs_assertions or SP#esaml_sp.idp_signs_envelopes,
         certificate = SP#esaml_sp.certificate,
+        cert_chain = SP#esaml_sp.cert_chain,
         consumer_location = SP#esaml_sp.consume_uri,
         logout_location = SP#esaml_sp.logout_uri,
         entity_id = SP#esaml_sp.metadata_uri}),

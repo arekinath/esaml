@@ -445,7 +445,7 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
                                            url = OrgUrl },
                        tech = #esaml_contact{name = TechName, email = TechEmail},
                        signed_requests = SignReq, signed_assertions = SignAss,
-                       certificate = CertBin, entity_id = EntityID,
+                       certificate = CertBin, cert_chain = CertChain, entity_id = EntityID,
                        consumer_location = ConsumerLoc,
                        logout_location = SLOLoc
                        }) ->
@@ -475,8 +475,11 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
                 attributes = [#xmlAttribute{name = 'use', value = "signing"}],
                 content = [#xmlElement{name = 'dsig:KeyInfo',
                     content = [#xmlElement{name = 'dsig:X509Data',
-                        content = [#xmlElement{name = 'dsig:X509Certificate',
-                            content = [#xmlText{value = base64:encode_to_string(CertBin)}]}]}]}]}]
+                        content =
+                                [#xmlElement{name = 'dsig:X509Certificate',
+                            content = [#xmlText{value = base64:encode_to_string(CertBin)}]} | 
+                                [#xmlElement{name = 'dsig:X509Certificate',
+                            content = [#xmlText{value = base64:encode_to_string(CertChainBin)}]} || CertChainBin <- CertChain]]}]}]}]
     end,
 
     SpSso0 = #xmlElement{name = 'md:SPSSODescriptor',
