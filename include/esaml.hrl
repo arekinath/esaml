@@ -25,6 +25,7 @@
 	signed_requests = true :: boolean(),
 	signed_assertions = true :: boolean(),
 	certificate :: binary() | undefined,
+	cert_chain = [] :: [binary()],
 	entity_id = "" :: string(),
 	consumer_location = "" :: string(),
 	logout_location :: string() | undefined}).
@@ -90,6 +91,7 @@
 	tech = #esaml_contact{} :: esaml:contact(),
 	key :: #'RSAPrivateKey'{} | undefined,
 	certificate :: binary() | undefined,
+	cert_chain = [] :: [binary()],
 	sp_sign_requests = false :: boolean(),
 	idp_signs_assertions = true :: boolean(),
 	idp_signs_envelopes = true :: boolean(),

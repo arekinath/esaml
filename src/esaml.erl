@@ -144,9 +144,9 @@ decode_idp_metadata(Xml) ->
           {"ds", 'http://www.w3.org/2000/09/xmldsig#'}],
     esaml_util:threaduntil([
         ?xpath_attr_required("/md:EntityDescriptor/@entityID", esaml_idp_metadata, entity_id, bad_entity),
-        ?xpath_attr_required("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleSignOnService/@Location",
+        ?xpath_attr_required("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleSignOnService[@Binding='urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST']/@Location",
             esaml_idp_metadata, login_location, missing_sso_location),
-        ?xpath_attr("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleLogoutService/@Location",
+        ?xpath_attr("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleLogoutService[@Binding='urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST']/@Location",
             esaml_idp_metadata, logout_location),
         ?xpath_text("/md:EntityDescriptor/md:IDPSSODescriptor/md:NameIDFormat/text()",
             esaml_idp_metadata, name_format, fun nameid_map/1),
@@ -445,7 +445,7 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
                                            url = OrgUrl },
                        tech = #esaml_contact{name = TechName, email = TechEmail},
                        signed_requests = SignReq, signed_assertions = SignAss,
-                       certificate = CertBin, entity_id = EntityID,
+                       certificate = CertBin, cert_chain = CertChain, entity_id = EntityID,
                        consumer_location = ConsumerLoc,
                        logout_location = SLOLoc
                        }) ->
@@ -475,8 +475,11 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
                 attributes = [#xmlAttribute{name = 'use', value = "signing"}],
                 content = [#xmlElement{name = 'dsig:KeyInfo',
                     content = [#xmlElement{name = 'dsig:X509Data',
-                        content = [#xmlElement{name = 'dsig:X509Certificate',
-                            content = [#xmlText{value = base64:encode_to_string(CertBin)}]}]}]}]}]
+                        content =
+                                [#xmlElement{name = 'dsig:X509Certificate',
+                            content = [#xmlText{value = base64:encode_to_string(CertBin)}]} | 
+                                [#xmlElement{name = 'dsig:X509Certificate',
+                            content = [#xmlText{value = base64:encode_to_string(CertChainBin)}]} || CertChainBin <- CertChain]]}]}]}]
     end,
 
     SpSso0 = #xmlElement{name = 'md:SPSSODescriptor',

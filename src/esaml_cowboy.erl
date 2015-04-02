@@ -79,7 +79,14 @@ validate_logout(SP, Req) ->
     {Method, Req} = cowboy_req:method(Req),
     case Method of
         <<"POST">> ->
-            {ok, PostVals, Req2} = cowboy_req:body_qs(Req, [{length, 128000}]),
+            % XXX: compat hack, the cowboy_req:continue/1 function was introduced at the
+            %      same time as the API change on body_qs/2, so we can use it to detect
+            %      which argument layout we need to use. this way we can be compat with
+            %      both cowboy <1.0 and 1.0.x.
+            {ok, PostVals, Req2} = case erlang:function_exported(cowboy_req, continue, 1) of
+                true -> cowboy_req:body_qs(Req, [{length, 128000}]);
+                false -> cowboy_req:body_qs(128000, Req)
+            end,
             SAMLEncoding = proplists:get_value(<<"SAMLEncoding">>, PostVals),
             SAMLResponse = proplists:get_value(<<"SAMLResponse">>, PostVals,
                 proplists:get_value(<<"SAMLRequest">>, PostVals)),
@@ -145,7 +152,11 @@ validate_assertion(SP, Req) ->
         {ok, esaml:assertion(), RelayState :: binary(), Req} |
         {error, Reason :: term(), Req}.
 validate_assertion(SP, DuplicateFun, Req) ->
-    {ok, PostVals, Req2} = cowboy_req:body_qs(Req, [{length, 128000}]),
+    % XXX: compat hack, see first version above for explanation
+    {ok, PostVals, Req2} = case erlang:function_exported(cowboy_req, continue, 1) of
+        true -> cowboy_req:body_qs(Req, [{length, 128000}]);
+        false -> cowboy_req:body_qs(128000, Req)
+    end,
     SAMLEncoding = proplists:get_value(<<"SAMLEncoding">>, PostVals),
     SAMLResponse = proplists:get_value(<<"SAMLResponse">>, PostVals),
     RelayState = proplists:get_value(<<"RelayState">>, PostVals),

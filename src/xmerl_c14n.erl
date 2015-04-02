@@ -317,7 +317,7 @@ xml_safe_string_test() ->
     "test&#xD;\n" = xml_safe_string("test\r\n").
 
 xml_safe_string_utf8_test() ->
-    String = unicode:characters_to_list(<<"バカの名前">>),
+    String = unicode:characters_to_list(<<"バカの名前"/utf8>>),
     String = xml_safe_string(String).
 
 c14n_3_1_test() ->
