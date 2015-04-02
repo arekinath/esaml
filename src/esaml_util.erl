@@ -26,8 +26,21 @@ convert_fingerprints(FPs) ->
     FPSources = FPs ++ esaml:config(trusted_fingerprints, []),
     lists:map(fun(Print) ->
         if is_list(Print) ->
-            Parts = string:tokens(Print, ":"),
-            list_to_binary(lists:map(fun(P) -> list_to_integer(P, 16) end, Parts));
+            case string:tokens(Print, ":") of
+                [Type, Base64] ->
+                    Hash = base64:decode(Base64),
+                    case string:to_lower(Type) of
+                        "sha" -> {sha, Hash};
+                        "sha1" -> {sha, Hash};
+                        "md5" -> {md5, Hash};
+                        "sha256" -> {sha256, Hash};
+                        "sha384" -> {sha384, Hash};
+                        "sha512" -> {sha512, Hash}
+                    end;
+                [_] -> error("unknown fingerprint format");
+                HexParts ->
+                    list_to_binary([list_to_integer(P, 16) || P <- HexParts])
+            end;
         is_binary(Print) ->
             Print;
         true ->
@@ -231,6 +244,16 @@ check_dupe_ets(A, Digest) ->
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+
+fingerprints_test() ->
+    [<<0:128>>] = convert_fingerprints([<<0:128>>]),
+    {'EXIT', _} = (catch convert_fingerprints(["testing"])),
+    [<<0:32,1,10,3>>] = convert_fingerprints(["00:00:00:00:01:0a:03"]),
+    Hash = crypto:hash(sha, <<"testing1234">>),
+    [{sha,Hash}] = convert_fingerprints(["SHA:" ++ base64:encode_to_string(Hash)]),
+    Sha256 = crypto:hash(sha256, <<"testing1234">>),
+    [{sha256,Sha256},{md5,Hash}] = convert_fingerprints(["SHA256:" ++ base64:encode_to_string(Sha256), "md5:" ++ base64:encode_to_string(Hash)]),
+    {'EXIT', _} = (catch convert_fingerprints(["SOMEALGO:AAAAA="])).
 
 datetime_test() ->
     "2013-05-02T17:26:53Z" = datetime_to_saml({{2013,5,2},{17,26,53}}),

@@ -16,7 +16,7 @@
 %% These routines work on xmerl data structures (see the xmerl user guide
 %% for details).
 %%
-%% Currently only RSA + SHA1 signatures are supported, in the typical
+%% Currently only RSA + SHA1|SHA256 signatures are supported, in the typical
 %% enveloped mode.
 -module(xmerl_dsig).
 
@@ -26,6 +26,9 @@
 -include_lib("public_key/include/public_key.hrl").
 
 -type xml_thing() :: #xmlDocument{} | #xmlElement{} | #xmlAttribute{} | #xmlPI{} | #xmlText{} | #xmlComment{}.
+-type sig_method() :: rsa_sha1 | rsa_sha256.
+-type sig_method_uri() :: string().
+-type fingerprint() :: binary() | {sha | sha256, binary()}.
 
 %% @doc Returns an xmlelement without any ds:Signature elements that are inside it.
 -spec strip(Element :: #xmlElement{} | #xmlDocument{}) -> #xmlElement{}.
@@ -50,7 +53,8 @@ strip(#xmlElement{content = Kids} = Elem) ->
 sign(ElementIn, PrivateKey = #'RSAPrivateKey'{}, CertBin) when is_binary(CertBin) ->
     sign(ElementIn, PrivateKey, CertBin, "http://www.w3.org/2000/09/xmldsig#rsa-sha1").
 
-sign(ElementIn, PrivateKey = #'RSAPrivateKey'{}, CertBin, SignatureMethodAlgorithm) when is_binary(CertBin) ->
+-spec sign(Element :: #xmlElement{}, PrivateKey :: #'RSAPrivateKey'{}, CertBin :: binary(), SignatureMethod :: sig_method() | sig_method_uri()) -> #xmlElement{}.
+sign(ElementIn, PrivateKey = #'RSAPrivateKey'{}, CertBin, SigMethod) when is_binary(CertBin) ->
     % get rid of any previous signature
     ElementStrip = strip(ElementIn),
 
@@ -69,7 +73,7 @@ sign(ElementIn, PrivateKey = #'RSAPrivateKey'{}, CertBin, SignatureMethodAlgorit
             end
     end,
 
-    {HashFunction, DigestMethod} = signature_props(SignatureMethodAlgorithm),
+    {HashFunction, DigestMethod, SignatureMethodAlgorithm} = signature_props(SigMethod),
 
     % first we need the digest, to generate our SignedInfo element
     CanonXml = xmerl_c14n:c14n(Element),
@@ -123,12 +127,15 @@ sign(ElementIn, PrivateKey = #'RSAPrivateKey'{}, CertBin, SignatureMethodAlgorit
 
     Element#xmlElement{content = [SigElem | Element#xmlElement.content]}.
 
-%% @doc Returns the canonical SHA-1 digest of an (optionally signed) element
+%% @doc Returns the canonical digest of an (optionally signed) element
 %%
 %% Strips any XML digital signatures and applies any relevant InclusiveNamespaces
 %% before generating the digest.
 -spec digest(Element :: #xmlElement{}) -> binary().
-digest(Element) ->
+digest(Element) -> digest(Element, sha).
+
+-spec digest(Element :: #xmlElement{}, HashFunction :: sha | sha256) -> binary().
+digest(Element, HashFunction) ->
     DsNs = [{"ds", 'http://www.w3.org/2000/09/xmldsig#'},
         {"ec", 'http://www.w3.org/2001/10/xml-exc-c14n#'}],
 
@@ -144,7 +151,7 @@ digest(Element) ->
 
     CanonXml = xmerl_c14n:c14n(strip(Element), false, InclNs),
     CanonXmlUtf8 = unicode:characters_to_binary(CanonXml, unicode, utf8),
-    crypto:hash(sha, CanonXmlUtf8).
+    crypto:hash(HashFunction, CanonXmlUtf8).
 
 %% @doc Verifies an XML digital signature on the given element.
 %%
@@ -153,14 +160,14 @@ digest(Element) ->
 %%
 %% Will throw badmatch errors if you give it XML that is not signed
 %% according to the xml-dsig spec. If you're using something other
-%% than rsa+sha1 this will asplode. Don't say I didn't warn you.
--spec verify(Element :: #xmlElement{}, Fingerprints :: [binary()] | any) -> ok | {error, bad_digest | bad_signature | cert_not_accepted}.
+%% than rsa+sha1 or sha256 this will asplode. Don't say I didn't warn you.
+-spec verify(Element :: #xmlElement{}, Fingerprints :: [fingerprint()] | any) -> ok | {error, bad_digest | bad_signature | cert_not_accepted}.
 verify(Element, Fingerprints) ->
     DsNs = [{"ds", 'http://www.w3.org/2000/09/xmldsig#'},
         {"ec", 'http://www.w3.org/2001/10/xml-exc-c14n#'}],
 
     [#xmlAttribute{value = SignatureMethodAlgorithm}] = xmerl_xpath:string("ds:Signature/ds:SignedInfo/ds:SignatureMethod/@Algorithm", Element, [{namespace, DsNs}]),
-    {HashFunction, _} = signature_props(SignatureMethodAlgorithm),
+    {HashFunction, _, _} = signature_props(SignatureMethodAlgorithm),
 
     [#xmlAttribute{value = "http://www.w3.org/2001/10/xml-exc-c14n#"}] = xmerl_xpath:string("ds:Signature/ds:SignedInfo/ds:CanonicalizationMethod/@Algorithm", Element, [{namespace, DsNs}]),
     [#xmlAttribute{value = SignatureMethodAlgorithm}] = xmerl_xpath:string("ds:Signature/ds:SignedInfo/ds:SignatureMethod/@Algorithm", Element, [{namespace, DsNs}]),
@@ -191,6 +198,7 @@ verify(Element, Fingerprints) ->
         [#xmlText{value = Cert64}] = xmerl_xpath:string("ds:Signature//ds:X509Certificate/text()", Element, [{namespace, DsNs}]),
         CertBin = base64:decode(Cert64),
         CertHash = crypto:hash(sha, CertBin),
+        CertHash2 = crypto:hash(sha256, CertBin),
 
         Cert = public_key:pkix_decode_cert(CertBin, plain),
         {_, KeyBin} = Cert#'Certificate'.tbsCertificate#'TBSCertificate'.subjectPublicKeyInfo#'SubjectPublicKeyInfo'.subjectPublicKey,
@@ -202,7 +210,7 @@ verify(Element, Fingerprints) ->
                     any ->
                         ok;
                     _ ->
-                        case lists:member(CertHash, Fingerprints) of
+                        case lists:any(fun(X) -> lists:member(X, Fingerprints) end, [CertHash, {sha,CertHash}, {sha256,CertHash2}]) of
                             true ->
                                 ok;
                             false ->
@@ -222,14 +230,21 @@ verify(Element, Fingerprints) ->
 verify(Element) ->
     verify(Element, any).
 
+-spec signature_props(atom() | string()) -> {HashFunction :: atom(), DigestMethodUrl :: string(), SignatureMethodUrl :: string()}.
 signature_props("http://www.w3.org/2000/09/xmldsig#rsa-sha1") ->
+    signature_props(rsa_sha1);
+signature_props(rsa_sha1) ->
     HashFunction = sha,
     DigestMethod = "http://www.w3.org/2000/09/xmldsig#sha1",
-    {HashFunction, DigestMethod};
+    Url = "http://www.w3.org/2000/09/xmldsig#rsa-sha1",
+    {HashFunction, DigestMethod, Url};
 signature_props("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256") ->
+    signature_props(rsa_sha256);
+signature_props(rsa_sha256) ->
     HashFunction = sha256,
     DigestMethod = "http://www.w3.org/2001/04/xmlenc#sha256",
-    {HashFunction, DigestMethod}.
+    Url = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+    {HashFunction, DigestMethod, Url}.
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -371,7 +386,7 @@ sign_and_verify_test() ->
 sign_and_verify_sha256_test() ->
     {Doc, _} = xmerl_scan:string("<x:foo id=\"test\" xmlns:x=\"urn:foo:x:\"><x:name>blah</x:name></x:foo>", [{namespace_conformant, true}]),
     {Key, CertBin} = test_sign_256_key(),
-    SignedXml = sign(Doc, Key, CertBin, "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"),
+    SignedXml = sign(Doc, Key, CertBin, rsa_sha256),
     Doc = strip(SignedXml),
     false = (Doc =:= SignedXml),
     ok = verify(SignedXml, [crypto:hash(sha, CertBin)]).
