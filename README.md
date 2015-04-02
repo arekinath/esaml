@@ -15,7 +15,7 @@ Single log-out protocols:
  * SP: send LogoutRequest (REDIRECT) -> receive LogoutResponse (REDIRECT or POST)
  * SP: receive LogoutRequest (REDIRECT OR POST) -> send LogoutResponse (REDIRECT)
 
-esaml supports RSA+SHA1 signing of all SP payloads, and validates signatures on all IdP responses. Compatibility flags are available to disable verification where IdP implementations lack support (see the [esaml_sp record](http://arekinath.github.io/esaml/esaml.html#type-sp), and members such as `idp_signs_logout_requests`).
+esaml supports RSA+SHA1/SHA256 signing of all SP payloads, and validates signatures on all IdP responses. Compatibility flags are available to disable verification where IdP implementations lack support (see the [esaml_sp record](http://arekinath.github.io/esaml/esaml.html#type-sp), and members such as `idp_signs_logout_requests`).
 
 ### API documentation
 
