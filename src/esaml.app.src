@@ -1,7 +1,7 @@
 {application, esaml,
  [
   {description, "SAML for erlang"},
-  {vsn, "1.0"},
+  {vsn, "1.1"},
   {registered, []},
   {included_applications, [
   ]},
