@@ -35,55 +35,63 @@ Each of the protocols you wish to support will normally require at least one dis
 
 The typical approach is to use a single Cowboy route for all SAML endpoints:
 
-    Dispatch = cowboy_router:compile([
-        {'_', [
-            {"/saml/:operation", sp_handler, []}
-        ]}
-    ])
+```erlang
+Dispatch = cowboy_router:compile([
+    {'_', [
+        {"/saml/:operation", sp_handler, []}
+    ]}
+])
+```
 
 Then, based on the value of the `operation` binding, you can decide which protocol to proceed with, by matching these up with the URIs you supply to `esaml_sp:setup/1`.
 
-    init(_Transport, Req, _Args) ->
+```erlang
+init(_Transport, Req, _Args) ->
+    ...
+    SP = esaml_sp:setup(#esaml_sp{
+        consume_uri = Base ++ "/consume",
+        metadata_uri = Base ++ "/metadata",
         ...
-        SP = esaml_sp:setup(#esaml_sp{
-            consume_uri = Base ++ "/consume",
-            metadata_uri = Base ++ "/metadata",
-            ...
-        }),
-        ...
+    }),
+    ...
 
-    handle(Req, S = #state{}) ->
-        {Operation, Req2} = cowboy_req:binding(operation, Req),
-        {Method, Req3} = cowboy_req:method(Req2),
-        handle(Method, Operation, Req3, S).
+handle(Req, S = #state{}) ->
+    {Operation, Req2} = cowboy_req:binding(operation, Req),
+    {Method, Req3} = cowboy_req:method(Req2),
+    handle(Method, Operation, Req3, S).
 
-    handle(<<"GET">>, <<"metadata">>, Req, S) ->
-        ...
+handle(<<"GET">>, <<"metadata">>, Req, S) ->
+    ...
 
-    handle(<<"POST">>, <<"consume">>, Req, S) ->
-        ...
+handle(<<"POST">>, <<"consume">>, Req, S) ->
+    ...
+```
 
 The functions on the `esaml_cowboy` module can either parse and validate an incoming SAML payload, or generate one and reply to the request with it.
 
 For example, the way the metadata endpoint is handled in the example is to unconditionally call `esaml_cowboy:reply_with_metadata/2`, which generates the SP metadata and replies to the request:
 
-    handle(<<"GET">>, <<"metadata">>, Req, S = #state{sp = SP}) ->
-        {ok, Req2} = esaml_cowboy:reply_with_metadata(SP, Req),
-        {ok, Req2, S};
+```erlang
+handle(<<"GET">>, <<"metadata">>, Req, S = #state{sp = SP}) ->
+    {ok, Req2} = esaml_cowboy:reply_with_metadata(SP, Req),
+    {ok, Req2, S};
+```
 
 On the other hand, the consumer endpoint (which handles the second step in the SSO protocol, receiving the Response + Assertion from the IdP) has to validate its payload before replying:
 
-    handle(<<"POST">>, <<"consume">>, Req, S = #state{sp = SP}) ->
-        case esaml_cowboy:validate_assertion(SP, Req) of
-            {ok, Assertion, RelayState, Req2} ->
-                % authentication success!
-                ...;
+```erlang
+handle(<<"POST">>, <<"consume">>, Req, S = #state{sp = SP}) ->
+    case esaml_cowboy:validate_assertion(SP, Req) of
+        {ok, Assertion, RelayState, Req2} ->
+            % authentication success!
+            ...;
 
-            {error, Reason, Req2} ->
-                {ok, Req3} = cowboy_req:reply(403, [{<<"content-type">>, <<"text/plain">>}],
-                    ["Access denied, assertion failed validation\n"], Req2),
-                {ok, Req3, S}
-        end;
+        {error, Reason, Req2} ->
+            {ok, Req3} = cowboy_req:reply(403, [{<<"content-type">>, <<"text/plain">>}],
+                ["Access denied, assertion failed validation\n"], Req2),
+            {ok, Req3, S}
+    end;
+```
 
 More complex configurations, including multiple IdPs, dynamic retrieval of IdP metadata, and integration with many kinds of application authentication systems are possible.
 
