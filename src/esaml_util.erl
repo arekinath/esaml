@@ -19,6 +19,7 @@
 -export([build_nsinfo/2]).
 -export([load_private_key/1, load_certificate_chain/1, load_certificate/1, load_metadata/2, load_metadata/1]).
 -export([convert_fingerprints/1]).
+-export([unique_id/0]).
 
 %% @doc Converts various ascii hex/base64 fingerprint formats to binary
 -spec convert_fingerprints([string() | binary()]) -> [binary()].
@@ -243,6 +244,19 @@ check_dupe_ets(A, Digest) ->
             end, []]),
             ok
     end.
+
+%% @doc Returns a unique xsd:ID string suitable for SAML use.
+-spec unique_id() -> string().
+unique_id() ->
+    <<R:64>> = crypto:rand_bytes(8),
+    T = try
+        erlang:system_time() % needs ERTS-7.0
+    catch
+        error:undef ->
+            {Mega, Sec, Micro} = erlang:now(),
+            Mega * 1000000 * 1000000 + Sec * 1000000 + Micro
+    end,
+    lists:flatten(io_lib:format("_~.16b~.16b", [R, T])).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
