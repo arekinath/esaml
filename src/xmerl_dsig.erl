@@ -38,9 +38,13 @@ strip(#xmlDocument{content = Kids} = Doc) ->
 
 strip(#xmlElement{content = Kids} = Elem) ->
     NewKids = lists:filter(fun(Kid) ->
-        case xmerl_c14n:canon_name(Kid) of
-            "http://www.w3.org/2000/09/xmldsig#Signature" -> false;
-            _Name -> true
+        case Kid of
+            #xmlElement{} ->
+                case xmerl_c14n:canon_name(Kid) of
+                    "http://www.w3.org/2000/09/xmldsig#Signature" -> false;
+                    _Name -> true
+                end;
+            _ -> true
         end
     end, Kids),
     Elem#xmlElement{content = NewKids}.
