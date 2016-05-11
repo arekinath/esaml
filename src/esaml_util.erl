@@ -253,7 +253,7 @@ unique_id() ->
         erlang:system_time() % needs ERTS-7.0
     catch
         error:undef ->
-            {Mega, Sec, Micro} = erlang:now(),
+            {Mega, Sec, Micro} = erlang:timestamp(),
             Mega * 1000000 * 1000000 + Sec * 1000000 + Micro
     end,
     lists:flatten(io_lib:format("_~.16b~.16b", [R, T])).
