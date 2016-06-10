@@ -93,6 +93,7 @@
 	certificate :: binary() | undefined,
 	cert_chain = [] :: [binary()],
 	sp_sign_requests = false :: boolean(),
+	sp_sign_method :: xml_dsig:sig_method() | undefined,
 	idp_signs_assertions = true :: boolean(),
 	idp_signs_envelopes = true :: boolean(),
 	idp_signs_logout_requests = true :: boolean(),
