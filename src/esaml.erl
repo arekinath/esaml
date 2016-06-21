@@ -154,7 +154,7 @@ decode_idp_metadata(Xml) ->
             esaml_idp_metadata, logout_location),
         ?xpath_text("/md:EntityDescriptor/md:IDPSSODescriptor/md:NameIDFormat/text()",
             esaml_idp_metadata, name_format, fun nameid_map/1),
-        ?xpath_text("/md:EntityDescriptor/md:IDPSSODescriptor/md:KeyDescriptor[@use='signing']/ds:KeyInfo/ds:X509Data/ds:X509Certificate/text()", esaml_idp_metadata, certificate, fun(X) -> base64:decode(list_to_binary(X)) end),
+        ?xpath_text_multiple("/md:EntityDescriptor/md:IDPSSODescriptor/md:KeyDescriptor[@use='signing']/ds:KeyInfo/ds:X509Data/ds:X509Certificate/text()", esaml_idp_metadata, certificates, fun(X) -> base64:decode(erlang:list_to_binary(X)) end),
         ?xpath_recurse("/md:EntityDescriptor/md:ContactPerson[@contactType='technical']", esaml_idp_metadata, tech, decode_contact),
         ?xpath_recurse("/md:EntityDescriptor/md:Organization", esaml_idp_metadata, org, decode_org),
         fun check_at_least_one_binding/1
@@ -647,11 +647,25 @@ validate_stale_assertion_test() ->
     }),
     {error, stale_assertion} = validate_assertion(E1, "foobar", "foo").
 
-decode_id_metadata_with_multiple_bindings_test() ->
+decode_idp_metadata_with_multiple_bindings_test() ->
     {Doc, _} = xmerl_scan:file("../test/data/okta_metadata.xml"),
     {ok, IdP} = decode_idp_metadata(Doc),
     #esaml_idp_metadata{login_location_post = "https://dev-xxx.okta.com/somehash/sso/saml_post"} = IdP,
     #esaml_idp_metadata{login_location_redirect = "https://dev-xxx.okta.com/somehash/sso/saml_redirect"} = IdP,
     #esaml_idp_metadata{login_location_artifact = "https://dev-xxx.okta.com/somehash/sso/saml_artifact"} = IdP.
+
+decode_idp_metadata_with_one_certificate_only_test() ->
+    {Doc, _} = xmerl_scan:file("../test/data/okta_metadata.xml"),
+    {ok, IdP} = decode_idp_metadata(Doc),
+    [Cert] = IdP#esaml_idp_metadata.certificates,
+    true = Cert =/= undefined.
+
+decode_idp_metadata_with_multiple_certificates_test() ->
+    {Doc, _} = xmerl_scan:file("../test/data/azure_metadata.xml"),
+    {ok, IdP} = decode_idp_metadata(Doc),
+    [Cert, AnotherCert|_] = IdP#esaml_idp_metadata.certificates,
+    true = Cert =/= undefined,
+    true = AnotherCert =/= undefined,
+    true = Cert =/= AnotherCert.
 
 -endif.
