@@ -144,16 +144,27 @@ decode_idp_metadata(Xml) ->
           {"ds", 'http://www.w3.org/2000/09/xmldsig#'}],
     esaml_util:threaduntil([
         ?xpath_attr_required("/md:EntityDescriptor/@entityID", esaml_idp_metadata, entity_id, bad_entity),
-        ?xpath_attr_required("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleSignOnService[@Binding='urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST']/@Location",
-            esaml_idp_metadata, login_location, missing_sso_location),
+        ?xpath_attr("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleSignOnService[@Binding='urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST']/@Location",
+            esaml_idp_metadata, login_location_post),
+        ?xpath_attr("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleSignOnService[@Binding='urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect']/@Location",
+            esaml_idp_metadata, login_location_redirect),
+        ?xpath_attr("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleSignOnService[@Binding='urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact']/@Location",
+            esaml_idp_metadata, login_location_artifact),
         ?xpath_attr("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleLogoutService[@Binding='urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST']/@Location",
             esaml_idp_metadata, logout_location),
         ?xpath_text("/md:EntityDescriptor/md:IDPSSODescriptor/md:NameIDFormat/text()",
             esaml_idp_metadata, name_format, fun nameid_map/1),
         ?xpath_text("/md:EntityDescriptor/md:IDPSSODescriptor/md:KeyDescriptor[@use='signing']/ds:KeyInfo/ds:X509Data/ds:X509Certificate/text()", esaml_idp_metadata, certificate, fun(X) -> base64:decode(list_to_binary(X)) end),
         ?xpath_recurse("/md:EntityDescriptor/md:ContactPerson[@contactType='technical']", esaml_idp_metadata, tech, decode_contact),
-        ?xpath_recurse("/md:EntityDescriptor/md:Organization", esaml_idp_metadata, org, decode_org)
+        ?xpath_recurse("/md:EntityDescriptor/md:Organization", esaml_idp_metadata, org, decode_org),
+        fun check_at_least_one_binding/1
     ], #esaml_idp_metadata{}).
+
+check_at_least_one_binding(#esaml_idp_metadata{login_location_post = undefined,
+                                               login_location_redirect = undefined,
+                                               login_location_artifact = undefined}) ->
+    {error, missing_sso_location};
+check_at_least_one_binding(M) -> M.
 
 %% @private
 -spec decode_org(Xml :: #xmlElement{}) -> {ok, #esaml_org{}} | {error, term()}.
@@ -635,5 +646,12 @@ validate_stale_assertion_test() ->
                     } ]} ]} ]
     }),
     {error, stale_assertion} = validate_assertion(E1, "foobar", "foo").
+
+decode_id_metadata_with_multiple_bindings_test() ->
+    {Doc, _} = xmerl_scan:file("../test/data/okta_metadata.xml"),
+    {ok, IdP} = decode_idp_metadata(Doc),
+    #esaml_idp_metadata{login_location_post = "https://dev-xxx.okta.com/somehash/sso/saml_post"} = IdP,
+    #esaml_idp_metadata{login_location_redirect = "https://dev-xxx.okta.com/somehash/sso/saml_redirect"} = IdP,
+    #esaml_idp_metadata{login_location_artifact = "https://dev-xxx.okta.com/somehash/sso/saml_artifact"} = IdP.
 
 -endif.

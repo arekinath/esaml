@@ -36,7 +36,9 @@
 	signed_requests = true :: boolean(),
 	certificate :: binary() | undefined,
 	entity_id = "" :: string(),
-	login_location = "" :: string(),
+	login_location_post :: string(),
+	login_location_redirect :: string(),
+	login_location_artifact :: string(),
 	logout_location :: string() | undefined,
 	name_format = unknown :: esaml:name_format()}).
 
