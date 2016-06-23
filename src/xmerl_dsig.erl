@@ -136,7 +136,7 @@ sign(ElementIn, PrivateKey = #'RSAPrivateKey'{}, CertBin, SigMethod) when is_bin
 %% Strips any XML digital signatures and applies any relevant InclusiveNamespaces
 %% before generating the digest.
 -spec digest(Element :: #xmlElement{}) -> binary().
-digest(Element) -> digest(Element, sha).
+digest(Element) -> digest(Element, sha256).
 
 -spec digest(Element :: #xmlElement{}, HashFunction :: sha | sha256) -> binary().
 digest(Element, HashFunction) ->
