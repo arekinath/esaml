@@ -12,27 +12,41 @@
 -include("esaml.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
--export([setup/1, generate_authn_request/2, generate_metadata/1]).
+-export([setup/1, generate_authn_request/2, generate_authn_request/3, generate_metadata/1]).
 -export([validate_assertion/2, validate_assertion/3]).
+
 -export([generate_logout_request/3, generate_logout_response/3]).
 -export([validate_logout_request/2, validate_logout_response/2]).
 
 -type xml() :: #xmlElement{} | #xmlDocument{}.
 -type dupe_fun() :: fun((esaml:assertion(), Digest :: binary()) -> ok | term()).
--export_type([dupe_fun/0]).
+-type generate_id_fun() :: fun(() -> binary()).
+-type check_id_fun() :: fun((string()) -> boolean()).
+-export_type([dupe_fun/0, check_id_fun/0]).
 
 %% @private
 -spec add_xml_id(xml()) -> xml().
 add_xml_id(Xml) ->
+    add_xml_id(Xml, fun esaml_util:unique_id/0).
+
+%% @private
+-spec add_xml_id(xml(), generate_id_fun()) -> xml().
+add_xml_id(Xml, IdFun) ->
+    UniqueId = IdFun(),
     Xml#xmlElement{attributes = Xml#xmlElement.attributes ++ [
         #xmlAttribute{name = 'ID',
-            value = esaml_util:unique_id(),
+            value = UniqueId,
             namespace = #xmlNamespace{}}
         ]}.
 
 %% @doc Return an AuthnRequest as an XML element
 -spec generate_authn_request(IdpURL :: string(), esaml:sp()) -> #xmlElement{}.
 generate_authn_request(IdpURL, SP = #esaml_sp{metadata_uri = MetaURI, consume_uri = ConsumeURI}) ->
+    generate_authn_request(IdpURL,  fun esaml_util:unique_id/0, SP).
+
+%% @doc Return an AuthnRequest as an XML element
+-spec generate_authn_request(IdpURL :: string(), generate_id_fun(), esaml:sp()) -> #xmlElement{}.
+generate_authn_request(IdpURL, IdFun, SP = #esaml_sp{metadata_uri = MetaURI, consume_uri = ConsumeURI}) ->
     Now = erlang:localtime_to_universaltime(erlang:localtime()),
     Stamp = esaml_util:datetime_to_saml(Now),
 
@@ -43,7 +57,7 @@ generate_authn_request(IdpURL, SP = #esaml_sp{metadata_uri = MetaURI, consume_ur
     if SP#esaml_sp.sp_sign_requests ->
         xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
     true ->
-        add_xml_id(Xml)
+        add_xml_id(Xml, IdFun)
     end.
 
 %% @doc Return a LogoutRequest as an XML element
@@ -188,13 +202,18 @@ validate_logout_response(Xml, SP = #esaml_sp{}) ->
 validate_assertion(Xml, SP = #esaml_sp{}) ->
     validate_assertion(Xml, fun(_A, _Digest) -> ok end, SP).
 
+-spec validate_assertion(xml(), dupe_fun(), esaml:sp()) ->
+        {ok, esaml:assertion()} | {error, Reason :: term()}.
+validate_assertion(Xml, DuplicateFun, SP = #esaml_sp{}) ->
+    validate_assertion(Xml, DuplicateFun, fun(_A) -> true end, SP).
+
 %% @doc Validate and decode an assertion envelope in parsed XML
 %%
 %% The dupe_fun argument is intended to detect duplicate assertions
 %% in the case of a replay attack.
--spec validate_assertion(xml(), dupe_fun(), esaml:sp()) ->
+-spec validate_assertion(xml(), dupe_fun(), check_id_fun(), esaml:sp()) ->
         {ok, esaml:assertion()} | {error, Reason :: term()}.
-validate_assertion(Xml, DuplicateFun, SP = #esaml_sp{}) ->
+validate_assertion(Xml, DuplicateFun, IdFun, SP = #esaml_sp{}) ->
     Ns = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
           {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}],
     esaml_util:threaduntil([
@@ -223,7 +242,7 @@ validate_assertion(Xml, DuplicateFun, SP = #esaml_sp{}) ->
             end
         end,
         fun(A) ->
-            case esaml:validate_assertion(A, SP#esaml_sp.consume_uri, SP#esaml_sp.metadata_uri) of
+            case esaml:validate_assertion(A, SP#esaml_sp.consume_uri, SP#esaml_sp.metadata_uri, IdFun) of
                 {ok, AR} -> AR;
                 {error, Reason} -> {error, Reason}
             end

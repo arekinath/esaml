@@ -17,7 +17,8 @@
 
 -export([start/2, stop/1, init/1]).
 -export([stale_time/1]).
--export([config/2, config/1, to_xml/1, decode_response/1, decode_assertion/1, validate_assertion/3]).
+-export([config/2, config/1, to_xml/1, decode_response/1, decode_assertion/1]).
+-export([validate_assertion/3, validate_assertion/4]).
 -export([decode_logout_request/1, decode_logout_response/1, decode_idp_metadata/1]).
 
 -type org() :: #esaml_org{}.
@@ -214,6 +215,7 @@ decode_response(Xml) ->
     esaml_util:threaduntil([
         ?xpath_attr_required("/samlp:Response/@Version", esaml_response, version, bad_version),
         ?xpath_attr_required("/samlp:Response/@IssueInstant", esaml_response, issue_instant, bad_response),
+        ?xpath_attr("/samlp:Response/@InResponseTo", esaml_response, in_response_to),
         ?xpath_attr("/samlp:Response/@Destination", esaml_response, destination),
         ?xpath_text("/samlp:Response/saml:Issuer/text()", esaml_response, issuer),
         ?xpath_attr("/samlp:Response/samlp:Status/samlp:StatusCode/@Value", esaml_response, status, fun status_code_map/1),
@@ -229,6 +231,7 @@ decode_assertion(Xml) ->
         ?xpath_attr_required("/saml:Assertion/@Version", esaml_assertion, version, bad_version),
         ?xpath_attr_required("/saml:Assertion/@IssueInstant", esaml_assertion, issue_instant, bad_assertion),
         ?xpath_attr_required("/saml:Assertion/saml:Subject/saml:SubjectConfirmation/saml:SubjectConfirmationData/@Recipient", esaml_assertion, recipient, bad_recipient),
+        ?xpath_attr("/saml:Assertion/saml:Subject/saml:SubjectConfirmation/saml:SubjectConfirmationData/@InResponseTo", esaml_assertion, in_response_to),
         ?xpath_text("/saml:Assertion/saml:Issuer/text()", esaml_assertion, issuer),
         ?xpath_recurse("/saml:Assertion/saml:Subject", esaml_assertion, subject, decode_assertion_subject),
         ?xpath_recurse("/saml:Assertion/saml:Conditions", esaml_assertion, conditions, decode_assertion_conditions),
@@ -338,11 +341,27 @@ check_stale(A) ->
 -spec validate_assertion(AssertionXml :: #xmlElement{}, Recipient :: string(), Audience :: string()) ->
         {ok, #esaml_assertion{}} | {error, Reason :: term()}.
 validate_assertion(AssertionXml, Recipient, Audience) ->
+    validate_assertion(AssertionXml, Recipient, Audience,
+                      fun(_) -> ok end).
+
+-spec validate_assertion(AssertionXml :: #xmlElement{}, Recipient :: string(), Audience :: string(), IdFun :: esaml_sp:check_id_fun()) ->
+        {ok, #esaml_assertion{}} | {error, Reason :: term()}.
+validate_assertion(AssertionXml, Recipient, Audience, IdFun) ->
     case decode_assertion(AssertionXml) of
         {error, Reason} ->
             {error, Reason};
         {ok, Assertion} ->
             esaml_util:threaduntil([
+                fun(A) -> case A of
+                    % no InResponseTo is ok
+                    #esaml_assertion{in_response_to = undefined} -> A;
+                    % if there is one, however, it better be one we expect
+                    #esaml_assertion{in_response_to = Id} ->
+                        case IdFun(Id) of
+                            true -> A;
+                            _ -> {error, bad_in_response_to}
+                        end
+                end end,
                 fun(A) -> case A of
                     #esaml_assertion{version = "2.0"} -> A;
                     _ -> {error, bad_version}
@@ -558,6 +577,11 @@ decode_response_status_test() ->
     Resp = decode_response(Doc),
     {ok, #esaml_response{issue_instant = "2013-01-01T01:01:01Z", status = success, issuer = "foo"}} = Resp.
 
+decode_response_with_inresponseto_test() ->
+    {Doc, _} = xmerl_scan:string("<samlp:Response xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" Version=\"2.0\" IssueInstant=\"2013-01-01T01:01:01Z\" InResponseTo=\"_4faf1ab5bd587d92145ad446e142c652\"><saml:Issuer>foo</saml:Issuer><samlp:Status><samlp:StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\" /></samlp:Status></samlp:Response>", [{namespace_conformant, true}]),
+    Resp = decode_response(Doc),
+    {ok, #esaml_response{issue_instant = "2013-01-01T01:01:01Z", status = success, issuer = "foo", in_response_to="_4faf1ab5bd587d92145ad446e142c652"}} = Resp.
+
 decode_response_bad_assertion_test() ->
     {Doc, _} = xmerl_scan:string("<samlp:Response xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" Version=\"2.0\" IssueInstant=\"2013-01-01T01:01:01Z\"><saml:Issuer>foo</saml:Issuer><samlp:Status><samlp:StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\" /></samlp:Status><saml:Assertion></saml:Assertion></samlp:Response>", [{namespace_conformant, true}]),
     Resp = decode_response(Doc),
@@ -569,9 +593,9 @@ decode_assertion_no_recipient_test() ->
     {error, bad_recipient} = Resp.
 
 decode_assertion_test() ->
-    {Doc, _} = xmerl_scan:string("<samlp:Response xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" Version=\"2.0\" IssueInstant=\"2013-01-01T01:01:01Z\"><saml:Issuer>foo</saml:Issuer><samlp:Status><samlp:StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\" /></samlp:Status><saml:Assertion Version=\"2.0\" IssueInstant=\"test\"><saml:Issuer>foo</saml:Issuer><saml:Subject><saml:NameID>foobar</saml:NameID><saml:SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\"><saml:SubjectConfirmationData Recipient=\"foobar123\" /></saml:SubjectConfirmation></saml:Subject></saml:Assertion></samlp:Response>", [{namespace_conformant, true}]),
+    {Doc, _} = xmerl_scan:string("<samlp:Response xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" Version=\"2.0\" IssueInstant=\"2013-01-01T01:01:01Z\" InResponseTo=\"_4faf1ab5bd587d92145ad446e142c652\"><saml:Issuer>foo</saml:Issuer><samlp:Status><samlp:StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\" /></samlp:Status><saml:Assertion Version=\"2.0\" IssueInstant=\"test\"><saml:Issuer>foo</saml:Issuer><saml:Subject><saml:NameID>foobar</saml:NameID><saml:SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\"><saml:SubjectConfirmationData Recipient=\"foobar123\" InResponseTo=\"_4faf1ab5bd587d92145ad446e142c652\"/></saml:SubjectConfirmation></saml:Subject></saml:Assertion></samlp:Response>", [{namespace_conformant, true}]),
     Resp = decode_response(Doc),
-    {ok, #esaml_response{issue_instant = "2013-01-01T01:01:01Z", issuer = "foo", status = success, assertion = #esaml_assertion{issue_instant = "test", issuer = "foo", recipient = "foobar123", subject = #esaml_subject{name = "foobar", confirmation_method = bearer}}}} = Resp.
+    {ok, #esaml_response{issue_instant = "2013-01-01T01:01:01Z", issuer = "foo", status = success, in_response_to = "_4faf1ab5bd587d92145ad446e142c652", assertion = #esaml_assertion{issue_instant = "test", issuer = "foo", recipient = "foobar123", subject = #esaml_subject{name = "foobar", confirmation_method = bearer}, in_response_to = "_4faf1ab5bd587d92145ad446e142c652"}}} = Resp.
 
 decode_conditions_test() ->
     {Doc, _} = xmerl_scan:string("<samlp:Response xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" Version=\"2.0\" IssueInstant=\"2013-01-01T01:01:01Z\"><saml:Issuer>foo</saml:Issuer><samlp:Status><samlp:StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\" /></samlp:Status><saml:Assertion Version=\"2.0\" IssueInstant=\"test\"><saml:Issuer>foo</saml:Issuer><saml:Subject><saml:NameID>foobar</saml:NameID><saml:SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\"><saml:SubjectConfirmationData Recipient=\"foobar123\" /></saml:SubjectConfirmation></saml:Subject><saml:Conditions NotBefore=\"before\" NotOnOrAfter=\"notafter\"><saml:AudienceRestriction><saml:Audience>foobaraudience</saml:Audience></saml:AudienceRestriction></saml:Conditions></saml:Assertion></samlp:Response>", [{namespace_conformant, true}]),

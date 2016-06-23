@@ -56,6 +56,7 @@
 	version = "2.0" :: esaml:version(),
 	issue_instant = "" :: esaml:datetime(),
 	recipient = "" :: string(),
+	in_response_to :: string() | undefined,
 	issuer = "" :: string(),
 	subject = #esaml_subject{} :: esaml:subject(),
 	conditions = [] :: esaml:conditions(),
@@ -79,6 +80,7 @@
 -record(esaml_response, {
 	version = "2.0" :: esaml:version(),
 	issue_instant = "" :: esaml:datetime(),
+	in_response_to :: string() | undefined,
 	destination = "" :: string(),
 	issuer = "" :: string(),
 	status = unknown :: esaml:status_code(),
