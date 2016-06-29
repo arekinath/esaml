@@ -50,6 +50,7 @@
 -record(esaml_subject, {
 	name = "" :: string(),
 	confirmation_method = bearer :: atom(),
+	notbefore = "" :: esaml:datetime(),
 	notonorafter = "" :: esaml:datetime()}).
 
 -record(esaml_assertion, {
