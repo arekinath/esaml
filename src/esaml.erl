@@ -82,6 +82,8 @@ nameid_map("urn:oasis:names:tc:SAML:1.1:nameid-format:WindowsDomainQualifiedName
 nameid_map("urn:oasis:names:tc:SAML:2.0:nameid-format:kerberos") -> krb;
 nameid_map("urn:oasis:names:tc:SAML:2.0:nameid-format:persistent") -> persistent;
 nameid_map("urn:oasis:names:tc:SAML:2.0:nameid-format:transient") -> transient;
+nameid_map("urn:oasis:names:tc:SAML:2.0:nameid-format:entity") -> entity;
+nameid_map("urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified") -> unspecified;
 nameid_map(S) when is_list(S) -> unknown.
 
 -spec subject_method_map(string()) -> bearer | unknown.
@@ -384,7 +386,7 @@ lang_elems(BaseTag, Val) ->
 %% @doc Convert a SAML request/metadata record into XML
 %% @private
 -spec to_xml(saml_record()) -> #xmlElement{}.
-to_xml(#esaml_authnreq{version = V, issue_instant = Time, destination = Dest, issuer = Issuer, consumer_location = Consumer}) ->
+to_xml(#esaml_authnreq{version = V, issue_instant = Time, destination = Dest, issuer = Issuer, consumer_location = Consumer, name_id_format = NameIDFormat}) ->
     Ns = #xmlNamespace{nodes = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
                                 {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
 
@@ -396,12 +398,7 @@ to_xml(#esaml_authnreq{version = V, issue_instant = Time, destination = Dest, is
                       #xmlAttribute{name = 'Destination', value = Dest},
                       #xmlAttribute{name = 'AssertionConsumerServiceURL', value = Consumer},
                       #xmlAttribute{name = 'ProtocolBinding', value = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"}],
-        content = [
-            #xmlElement{name = 'saml:Issuer', content = [#xmlText{value = Issuer}]},
-            #xmlElement{name = 'saml:Subject', content = [
-                #xmlElement{name = 'saml:SubjectConfirmation', attributes = [#xmlAttribute{name = 'Method', value = "urn:oasis:names:tc:SAML:2.0:cm:bearer"}]}
-            ]}
-        ]
+        content = generate_authn_content(NameIDFormat, Issuer)
     });
 
 to_xml(#esaml_logoutreq{version = V, issue_instant = Time, destination = Dest, issuer = Issuer,
@@ -477,7 +474,7 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
                     content = [#xmlElement{name = 'dsig:X509Data',
                         content =
                                 [#xmlElement{name = 'dsig:X509Certificate',
-                            content = [#xmlText{value = base64:encode_to_string(CertBin)}]} | 
+                            content = [#xmlText{value = base64:encode_to_string(CertBin)}]} |
                                 [#xmlElement{name = 'dsig:X509Certificate',
                             content = [#xmlText{value = base64:encode_to_string(CertChainBin)}]} || CertChainBin <- CertChain]]}]}]}]
     end,
@@ -529,6 +526,18 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
 
 to_xml(_) -> error("unknown record").
 
+generate_authn_content(undefined, Issuer) ->
+    [
+        #xmlElement{name = 'saml:Issuer', content = [#xmlText{value = Issuer}]}
+    ];
+generate_authn_content(NameIDFormat, Issuer) ->
+    [
+        #xmlElement{name = 'saml:Issuer', content = [#xmlText{value = Issuer}]},
+        #xmlElement{name = 'samlp:NameIDPolicy',
+                    attributes = [
+                                  #xmlAttribute{name = 'Format', value = NameIDFormat}
+                                 ]}
+    ].
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
