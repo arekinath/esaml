@@ -203,6 +203,7 @@ validate_assertion(Xml, DuplicateFun, SP = #esaml_sp{}) ->
             case xmerl_xpath:string("/samlp:Response/saml:Assertion", X, [{namespace, Ns}]) of
                 [A] -> A;
                 assertion ->
+                  erlang:display('validating assertion'),
                   erlang:display(X),
                   erlang:display(assertion),
                   {error, bad_assertion}
