@@ -39,16 +39,20 @@ xml_payload_type(Xml) ->
 -spec decode_response(SAMLEncoding :: binary(), SAMLResponse :: binary()) -> #xmlDocument{}.
 decode_response(?deflate, SAMLResponse) ->
 	XmlData = binary_to_list(zlib:unzip(base64:decode(SAMLResponse))),
+  erlang:display(XmlData),
 	{Xml, _} = xmerl_scan:string(XmlData, [{namespace_conformant, true}]),
     Xml;
 decode_response(_, SAMLResponse) ->
 	Data = base64:decode(SAMLResponse),
     XmlData = case (catch zlib:unzip(Data)) of
-        {'EXIT', _} -> binary_to_list(Data);
-        Bin -> binary_to_list(Bin)
+        {'EXIT', _} ->
+          binary_to_list(Data);
+        Bin ->
+          binary_to_list(Bin)
     end,
-	{Xml, _} = xmerl_scan:string(XmlData, [{namespace_conformant, true}]),
-    Xml.
+  erlang:display(XmlData),
+  {Xml, _} = xmerl_scan:string(XmlData, [{namespace_conformant, true}]),
+  Xml.
 
 %% @doc Encode a SAMLRequest (or SAMLResponse) as an HTTP-REDIRECT binding
 %%
