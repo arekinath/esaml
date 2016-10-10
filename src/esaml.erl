@@ -398,6 +398,7 @@ to_xml(#esaml_authnreq{version = V, issue_instant = Time, destination = Dest, is
                       #xmlAttribute{name = 'ProtocolBinding', value = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"}],
         content = [
             #xmlElement{name = 'saml:Issuer', content = [#xmlText{value = Issuer}]},
+            #xmlElement{name = 'samlp:NameIDPolicy', attributes = [#xmlAttribute{name = 'Format', value = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"}]},
             #xmlElement{name = 'saml:Subject', content = [
                 #xmlElement{name = 'saml:SubjectConfirmation', attributes = [#xmlAttribute{name = 'Method', value = "urn:oasis:names:tc:SAML:2.0:cm:bearer"}]}
             ]}
@@ -477,7 +478,7 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
                     content = [#xmlElement{name = 'dsig:X509Data',
                         content =
                                 [#xmlElement{name = 'dsig:X509Certificate',
-                            content = [#xmlText{value = base64:encode_to_string(CertBin)}]} | 
+                            content = [#xmlText{value = base64:encode_to_string(CertBin)}]} |
                                 [#xmlElement{name = 'dsig:X509Certificate',
                             content = [#xmlText{value = base64:encode_to_string(CertChainBin)}]} || CertChainBin <- CertChain]]}]}]}]
     end,
