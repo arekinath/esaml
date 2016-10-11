@@ -26,13 +26,14 @@
 add_xml_id(Xml) ->
     Xml#xmlElement{attributes = Xml#xmlElement.attributes ++ [
         #xmlAttribute{name = 'ID',
-            value = uuid:to_string(uuid:uuid1()),
+            value = "a" ++ uuid:to_string(uuid:uuid1()),
             namespace = #xmlNamespace{}}
         ]}.
 
 %% @doc Return an AuthnRequest as an XML element
 -spec generate_authn_request(IdpURL :: string(), esaml:sp()) -> #xmlElement{}.
 generate_authn_request(IdpURL, SP = #esaml_sp{metadata_uri = MetaURI, consume_uri = ConsumeURI}) ->
+    erlang:display("Generate authnreq... v2"),
     Now = erlang:localtime_to_universaltime(erlang:localtime()),
     Stamp = esaml_util:datetime_to_saml(Now),
 
@@ -201,7 +202,11 @@ validate_assertion(Xml, DuplicateFun, SP = #esaml_sp{}) ->
         fun(X) ->
             case xmerl_xpath:string("/samlp:Response/saml:Assertion", X, [{namespace, Ns}]) of
                 [A] -> A;
-                _ -> {error, bad_assertion}
+                Assertion ->
+                  erlang:display("validating assertion"),
+                  erlang:display(X),
+                  erlang:display(Assertion),
+                  {error, bad_assertion}
             end
         end,
         fun(A) ->
