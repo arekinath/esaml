@@ -166,7 +166,10 @@ verify(ElementPre, Fingerprints) ->
     DsNs = [{"ds", 'http://www.w3.org/2000/09/xmldsig#'},
         {"ec", 'http://www.w3.org/2001/10/xml-exc-c14n#'}],
     Element = case xmerl_xpath:string("saml2:Assertion", ElementPre, []) of
-        [] -> ElementPre;
+        [] -> case xmerl_xpath:string("Assertion", ElementPre, []) of
+          [] -> ElementPre;
+          [Element4 = #xmlElement{}] -> Element4
+        end;
         [Element3 = #xmlElement{}] -> Element3
     end,
     [#xmlAttribute{value = SignatureMethodAlgorithm}] = xmerl_xpath:string("ds:Signature/ds:SignedInfo/ds:SignatureMethod/@Algorithm", Element, [{namespace, DsNs}]),
