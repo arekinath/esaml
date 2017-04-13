@@ -14,6 +14,15 @@
         end
     end).
 
+-define(xpath_generic_multiple(XPath, Record, Field, TransFun, TargetType, NotFoundRet),
+	fun(Resp) ->
+        case xmerl_xpath:string(XPath, Xml, [{namespace, Ns}]) of
+            [_|_] = List ->
+                Resp#Record{Field = lists:map(TransFun, [V || #TargetType{value = V} <- List])};
+            _ -> NotFoundRet
+        end
+    end).
+
 -define(xpath_generic(XPath, Record, Field, TargetType, NotFoundRet),
 	fun(Resp) ->
         case xmerl_xpath:string(XPath, Xml, [{namespace, Ns}]) of
@@ -36,6 +45,11 @@
     ?xpath_generic(XPath, Record, Field, xmlText, Resp)).
 -define(xpath_text(XPath, Record, Field, TransFun),
     ?xpath_generic(XPath, Record, Field, TransFun, xmlText, Resp)).
+
+-define(xpath_text_multiple(XPath, Record, Field),
+    ?xpath_generic_multiple(XPath, Record, Field, xmlText, Resp)).
+-define(xpath_text_multiple(XPath, Record, Field, TransFun),
+    ?xpath_generic_multiple(XPath, Record, Field, TransFun, xmlText, Resp)).
 
 -define(xpath_text_required(XPath, Record, Field, Error),
     ?xpath_generic(XPath, Record, Field, xmlText, {error, Error})).
