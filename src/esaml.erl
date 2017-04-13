@@ -254,6 +254,7 @@ decode_assertion_subject(Xml) ->
     esaml_util:threaduntil([
         ?xpath_text("/saml:Subject/saml:NameID/text()", esaml_subject, name),
         ?xpath_attr("/saml:Subject/saml:SubjectConfirmation/@Method", esaml_subject, confirmation_method, fun subject_method_map/1),
+        ?xpath_attr("/saml:Subject/saml:SubjectConfirmation/saml:SubjectConfirmationData/@NotBefore", esaml_subject, notbefore),
         ?xpath_attr("/saml:Subject/saml:SubjectConfirmation/saml:SubjectConfirmationData/@NotOnOrAfter", esaml_subject, notonorafter)
     ], #esaml_subject{}).
 
@@ -346,6 +347,52 @@ check_stale(A) ->
         A
     end.
 
+%% @doc Returns the time before which an assertion is considered early.
+%% @private
+-spec early_time(#esaml_assertion{}) -> integer().
+early_time(A) ->
+    esaml_util:thread([
+        fun(T) ->
+            case A#esaml_assertion.subject of
+                #esaml_subject{notbefore = ""} -> T;
+                #esaml_subject{notbefore = Restrict} ->
+                    Secs = calendar:datetime_to_gregorian_seconds(
+                        esaml_util:saml_to_datetime(Restrict)),
+                    if (Secs > T) -> Secs; true -> T end
+            end
+        end,
+        fun(T) ->
+            Conds = A#esaml_assertion.conditions,
+            case proplists:get_value(not_before, Conds) of
+                undefined -> T;
+                Restrict ->
+                    Secs = calendar:datetime_to_gregorian_seconds(
+                        esaml_util:saml_to_datetime(Restrict)),
+                    if (Secs > T) -> Secs; true -> T end
+            end
+        end,
+        fun(T) ->
+            if (T =:= none) ->
+                II = A#esaml_assertion.issue_instant,
+                IISecs = calendar:datetime_to_gregorian_seconds(
+                    esaml_util:saml_to_datetime(II)),
+                IISecs;
+            true ->
+                T
+            end
+        end
+    ], 0).
+
+check_early(A) ->
+    Now = erlang:localtime_to_universaltime(erlang:localtime()),
+    NowSecs = calendar:datetime_to_gregorian_seconds(Now),
+    T = early_time(A),
+    if (NowSecs < T) ->
+        {error, early_assertion};
+    true ->
+        A
+    end.
+
 %% @doc Parse and validate an assertion, returning it as a record
 %% @private
 -spec validate_assertion(AssertionXml :: #xmlElement{}, Recipient :: string(), Audience :: string()) ->
@@ -373,7 +420,8 @@ validate_assertion(AssertionXml, Recipient, Audience) ->
                         end;
                     _ -> A
                 end end,
-                fun check_stale/1
+                fun check_stale/1,
+                fun check_early/1
             ], Assertion)
     end.
 
@@ -607,13 +655,15 @@ decode_attributes_test() ->
 
 validate_assertion_test() ->
     Now = erlang:localtime_to_universaltime(erlang:localtime()),
+    IssueSecs = calendar:datetime_to_gregorian_seconds(Now),
+    Issue = esaml_util:datetime_to_saml(calendar:gregorian_seconds_to_datetime(IssueSecs)),
     DeathSecs = calendar:datetime_to_gregorian_seconds(Now) + 1,
     Death = esaml_util:datetime_to_saml(calendar:gregorian_seconds_to_datetime(DeathSecs)),
 
     Ns = #xmlNamespace{nodes = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
 
     E1 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
-        attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}, #xmlAttribute{name = 'Version', value = "2.0"}, #xmlAttribute{name = 'IssueInstant', value = "now"}],
+        attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}, #xmlAttribute{name = 'Version', value = "2.0"}, #xmlAttribute{name = 'IssueInstant', value = Issue}],
         content = [
             #xmlElement{name = 'saml:Subject', content = [
                 #xmlElement{name = 'saml:SubjectConfirmation', content = [
@@ -626,7 +676,7 @@ validate_assertion_test() ->
                     #xmlElement{name = 'saml:Audience', content = [#xmlText{value = "foo"}]}] }] } ]
     }),
     {ok, Assertion} = validate_assertion(E1, "foobar", "foo"),
-    #esaml_assertion{issue_instant = "now", recipient = "foobar", subject = #esaml_subject{notonorafter = Death}, conditions = [{audience, "foo"}]} = Assertion,
+    #esaml_assertion{issue_instant = Issue, recipient = "foobar", subject = #esaml_subject{notonorafter = Death}, conditions = [{audience, "foo"}]} = Assertion,
     {error, bad_recipient} = validate_assertion(E1, "foo", "something"),
     {error, bad_audience} = validate_assertion(E1, "foobar", "something"),
 
@@ -644,7 +694,22 @@ validate_assertion_test() ->
 validate_stale_assertion_test() ->
     Ns = #xmlNamespace{nodes = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
     OldStamp = esaml_util:datetime_to_saml({{1990,1,1}, {1,1,1}}),
+
     E1 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
+        attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}, #xmlAttribute{name = 'Version', value = "2.0"}, #xmlAttribute{name = 'IssueInstant', value = "now"}],
+        content = [
+            #xmlElement{name = 'saml:Subject', content = [
+                #xmlElement{name = 'saml:SubjectConfirmation', content = [
+                    #xmlElement{name = 'saml:SubjectConfirmationData',
+                        attributes = [#xmlAttribute{name = 'Recipient', value = "foobar"}]
+                    } ]} ]},
+
+            #xmlElement{name = 'saml:Conditions',
+                attributes = [#xmlAttribute{name = 'NotOnOrAfter', value = OldStamp}] }]
+    }),
+    {error, stale_assertion} = validate_assertion(E1, "foobar", "foo"),
+
+    E2 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
         attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}, #xmlAttribute{name = 'Version', value = "2.0"}, #xmlAttribute{name = 'IssueInstant', value = "now"}],
         content = [
             #xmlElement{name = 'saml:Subject', content = [
@@ -654,7 +719,40 @@ validate_stale_assertion_test() ->
                                       #xmlAttribute{name = 'NotOnOrAfter', value = OldStamp}]
                     } ]} ]} ]
     }),
-    {error, stale_assertion} = validate_assertion(E1, "foobar", "foo").
+    {error, stale_assertion} = validate_assertion(E2, "foobar", "foo").
+
+validate_early_assertion_test() ->
+    Ns = #xmlNamespace{nodes = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
+    Now = erlang:localtime_to_universaltime(erlang:localtime()),
+    IssueSecs = calendar:datetime_to_gregorian_seconds(Now),
+    Issue = esaml_util:datetime_to_saml(calendar:gregorian_seconds_to_datetime(IssueSecs)),
+    Future = esaml_util:datetime_to_saml({{2026,1,1}, {1,1,1}}),
+
+    E1 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
+        attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}, #xmlAttribute{name = 'Version', value = "2.0"}, #xmlAttribute{name = 'IssueInstant', value = Issue}],
+        content = [
+            #xmlElement{name = 'saml:Subject', content = [
+                #xmlElement{name = 'saml:SubjectConfirmation', content = [
+                    #xmlElement{name = 'saml:SubjectConfirmationData',
+                        attributes = [#xmlAttribute{name = 'Recipient', value = "foobar"}]
+                    } ]} ]},
+
+            #xmlElement{name = 'saml:Conditions',
+                attributes = [#xmlAttribute{name = 'NotBefore', value = Future}] }]
+    }),
+    {error, early_assertion} = validate_assertion(E1, "foobar", "foo"),
+
+    E2 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
+        attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}, #xmlAttribute{name = 'Version', value = "2.0"}, #xmlAttribute{name = 'IssueInstant', value = Issue}],
+        content = [
+            #xmlElement{name = 'saml:Subject', content = [
+                #xmlElement{name = 'saml:SubjectConfirmation', content = [
+                    #xmlElement{name = 'saml:SubjectConfirmationData',
+                        attributes = [#xmlAttribute{name = 'Recipient', value = "foobar"},
+                                      #xmlAttribute{name = 'NotBefore', value = Future}]
+                    } ]} ]} ]
+    }),
+    {error, early_assertion} = validate_assertion(E2, "foobar", "foo").
 
 decode_idp_metadata_with_multiple_bindings_test() ->
     {Doc, _} = xmerl_scan:file("../test/data/okta_metadata.xml"),
