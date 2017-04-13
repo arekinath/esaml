@@ -82,6 +82,8 @@ nameid_map("urn:oasis:names:tc:SAML:1.1:nameid-format:WindowsDomainQualifiedName
 nameid_map("urn:oasis:names:tc:SAML:2.0:nameid-format:kerberos") -> krb;
 nameid_map("urn:oasis:names:tc:SAML:2.0:nameid-format:persistent") -> persistent;
 nameid_map("urn:oasis:names:tc:SAML:2.0:nameid-format:transient") -> transient;
+nameid_map("urn:oasis:names:tc:SAML:2.0:nameid-format:entity") -> entity;
+nameid_map("urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified") -> unspecified;
 nameid_map(S) when is_list(S) -> unknown.
 
 -spec subject_method_map(string()) -> bearer | unknown.
@@ -144,16 +146,27 @@ decode_idp_metadata(Xml) ->
           {"ds", 'http://www.w3.org/2000/09/xmldsig#'}],
     esaml_util:threaduntil([
         ?xpath_attr_required("/md:EntityDescriptor/@entityID", esaml_idp_metadata, entity_id, bad_entity),
-        ?xpath_attr_required("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleSignOnService[@Binding='urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST']/@Location",
-            esaml_idp_metadata, login_location, missing_sso_location),
+        ?xpath_attr("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleSignOnService[@Binding='urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST']/@Location",
+            esaml_idp_metadata, login_location_post),
+        ?xpath_attr("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleSignOnService[@Binding='urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect']/@Location",
+            esaml_idp_metadata, login_location_redirect),
+        ?xpath_attr("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleSignOnService[@Binding='urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact']/@Location",
+            esaml_idp_metadata, login_location_artifact),
         ?xpath_attr("/md:EntityDescriptor/md:IDPSSODescriptor/md:SingleLogoutService[@Binding='urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST']/@Location",
             esaml_idp_metadata, logout_location),
         ?xpath_text("/md:EntityDescriptor/md:IDPSSODescriptor/md:NameIDFormat/text()",
             esaml_idp_metadata, name_format, fun nameid_map/1),
-        ?xpath_text("/md:EntityDescriptor/md:IDPSSODescriptor/md:KeyDescriptor[@use='signing']/ds:KeyInfo/ds:X509Data/ds:X509Certificate/text()", esaml_idp_metadata, certificate, fun(X) -> base64:decode(list_to_binary(X)) end),
+        ?xpath_text_multiple("/md:EntityDescriptor/md:IDPSSODescriptor/md:KeyDescriptor[@use='signing']/ds:KeyInfo/ds:X509Data/ds:X509Certificate/text()", esaml_idp_metadata, certificates, fun(X) -> base64:decode(erlang:list_to_binary(X)) end),
         ?xpath_recurse("/md:EntityDescriptor/md:ContactPerson[@contactType='technical']", esaml_idp_metadata, tech, decode_contact),
-        ?xpath_recurse("/md:EntityDescriptor/md:Organization", esaml_idp_metadata, org, decode_org)
+        ?xpath_recurse("/md:EntityDescriptor/md:Organization", esaml_idp_metadata, org, decode_org),
+        fun check_at_least_one_binding/1
     ], #esaml_idp_metadata{}).
+
+check_at_least_one_binding(#esaml_idp_metadata{login_location_post = undefined,
+                                               login_location_redirect = undefined,
+                                               login_location_artifact = undefined}) ->
+    {error, missing_sso_location};
+check_at_least_one_binding(M) -> M.
 
 %% @private
 -spec decode_org(Xml :: #xmlElement{}) -> {ok, #esaml_org{}} | {error, term()}.
@@ -241,6 +254,7 @@ decode_assertion_subject(Xml) ->
     esaml_util:threaduntil([
         ?xpath_text("/saml:Subject/saml:NameID/text()", esaml_subject, name),
         ?xpath_attr("/saml:Subject/saml:SubjectConfirmation/@Method", esaml_subject, confirmation_method, fun subject_method_map/1),
+        ?xpath_attr("/saml:Subject/saml:SubjectConfirmation/saml:SubjectConfirmationData/@NotBefore", esaml_subject, notbefore),
         ?xpath_attr("/saml:Subject/saml:SubjectConfirmation/saml:SubjectConfirmationData/@NotOnOrAfter", esaml_subject, notonorafter)
     ], #esaml_subject{}).
 
@@ -333,6 +347,52 @@ check_stale(A) ->
         A
     end.
 
+%% @doc Returns the time before which an assertion is considered early.
+%% @private
+-spec early_time(#esaml_assertion{}) -> integer().
+early_time(A) ->
+    esaml_util:thread([
+        fun(T) ->
+            case A#esaml_assertion.subject of
+                #esaml_subject{notbefore = ""} -> T;
+                #esaml_subject{notbefore = Restrict} ->
+                    Secs = calendar:datetime_to_gregorian_seconds(
+                        esaml_util:saml_to_datetime(Restrict)),
+                    if (Secs > T) -> Secs; true -> T end
+            end
+        end,
+        fun(T) ->
+            Conds = A#esaml_assertion.conditions,
+            case proplists:get_value(not_before, Conds) of
+                undefined -> T;
+                Restrict ->
+                    Secs = calendar:datetime_to_gregorian_seconds(
+                        esaml_util:saml_to_datetime(Restrict)),
+                    if (Secs > T) -> Secs; true -> T end
+            end
+        end,
+        fun(T) ->
+            if (T =:= none) ->
+                II = A#esaml_assertion.issue_instant,
+                IISecs = calendar:datetime_to_gregorian_seconds(
+                    esaml_util:saml_to_datetime(II)),
+                IISecs;
+            true ->
+                T
+            end
+        end
+    ], 0).
+
+check_early(A) ->
+    Now = erlang:localtime_to_universaltime(erlang:localtime()),
+    NowSecs = calendar:datetime_to_gregorian_seconds(Now),
+    T = early_time(A),
+    if (NowSecs < T) ->
+        {error, early_assertion};
+    true ->
+        A
+    end.
+
 %% @doc Parse and validate an assertion, returning it as a record
 %% @private
 -spec validate_assertion(AssertionXml :: #xmlElement{}, Recipient :: string(), Audience :: string()) ->
@@ -360,7 +420,8 @@ validate_assertion(AssertionXml, Recipient, Audience) ->
                         end;
                     _ -> A
                 end end,
-                fun check_stale/1
+                fun check_stale/1,
+                fun check_early/1
             ], Assertion)
     end.
 
@@ -384,7 +445,7 @@ lang_elems(BaseTag, Val) ->
 %% @doc Convert a SAML request/metadata record into XML
 %% @private
 -spec to_xml(saml_record()) -> #xmlElement{}.
-to_xml(#esaml_authnreq{version = V, issue_instant = Time, destination = Dest, issuer = Issuer, consumer_location = Consumer}) ->
+to_xml(#esaml_authnreq{version = V, issue_instant = Time, destination = Dest, issuer = Issuer, consumer_location = Consumer, name_id_format = NameIDFormat}) ->
     Ns = #xmlNamespace{nodes = [{"samlp", 'urn:oasis:names:tc:SAML:2.0:protocol'},
                                 {"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
 
@@ -396,12 +457,7 @@ to_xml(#esaml_authnreq{version = V, issue_instant = Time, destination = Dest, is
                       #xmlAttribute{name = 'Destination', value = Dest},
                       #xmlAttribute{name = 'AssertionConsumerServiceURL', value = Consumer},
                       #xmlAttribute{name = 'ProtocolBinding', value = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"}],
-        content = [
-            #xmlElement{name = 'saml:Issuer', content = [#xmlText{value = Issuer}]},
-            #xmlElement{name = 'saml:Subject', content = [
-                #xmlElement{name = 'saml:SubjectConfirmation', attributes = [#xmlAttribute{name = 'Method', value = "urn:oasis:names:tc:SAML:2.0:cm:bearer"}]}
-            ]}
-        ]
+        content = generate_authn_content(NameIDFormat, Issuer)
     });
 
 to_xml(#esaml_logoutreq{version = V, issue_instant = Time, destination = Dest, issuer = Issuer,
@@ -477,7 +533,7 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
                     content = [#xmlElement{name = 'dsig:X509Data',
                         content =
                                 [#xmlElement{name = 'dsig:X509Certificate',
-                            content = [#xmlText{value = base64:encode_to_string(CertBin)}]} | 
+                            content = [#xmlText{value = base64:encode_to_string(CertBin)}]} |
                                 [#xmlElement{name = 'dsig:X509Certificate',
                             content = [#xmlText{value = base64:encode_to_string(CertChainBin)}]} || CertChainBin <- CertChain]]}]}]}]
     end,
@@ -529,6 +585,18 @@ to_xml(#esaml_sp_metadata{org = #esaml_org{name = OrgName, displayname = OrgDisp
 
 to_xml(_) -> error("unknown record").
 
+generate_authn_content(undefined, Issuer) ->
+    [
+        #xmlElement{name = 'saml:Issuer', content = [#xmlText{value = Issuer}]}
+    ];
+generate_authn_content(NameIDFormat, Issuer) ->
+    [
+        #xmlElement{name = 'saml:Issuer', content = [#xmlText{value = Issuer}]},
+        #xmlElement{name = 'samlp:NameIDPolicy',
+                    attributes = [
+                                  #xmlAttribute{name = 'Format', value = NameIDFormat}
+                                 ]}
+    ].
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -587,13 +655,15 @@ decode_attributes_test() ->
 
 validate_assertion_test() ->
     Now = erlang:localtime_to_universaltime(erlang:localtime()),
+    IssueSecs = calendar:datetime_to_gregorian_seconds(Now),
+    Issue = esaml_util:datetime_to_saml(calendar:gregorian_seconds_to_datetime(IssueSecs)),
     DeathSecs = calendar:datetime_to_gregorian_seconds(Now) + 1,
     Death = esaml_util:datetime_to_saml(calendar:gregorian_seconds_to_datetime(DeathSecs)),
 
     Ns = #xmlNamespace{nodes = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
 
     E1 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
-        attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}, #xmlAttribute{name = 'Version', value = "2.0"}, #xmlAttribute{name = 'IssueInstant', value = "now"}],
+        attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}, #xmlAttribute{name = 'Version', value = "2.0"}, #xmlAttribute{name = 'IssueInstant', value = Issue}],
         content = [
             #xmlElement{name = 'saml:Subject', content = [
                 #xmlElement{name = 'saml:SubjectConfirmation', content = [
@@ -606,7 +676,7 @@ validate_assertion_test() ->
                     #xmlElement{name = 'saml:Audience', content = [#xmlText{value = "foo"}]}] }] } ]
     }),
     {ok, Assertion} = validate_assertion(E1, "foobar", "foo"),
-    #esaml_assertion{issue_instant = "now", recipient = "foobar", subject = #esaml_subject{notonorafter = Death}, conditions = [{audience, "foo"}]} = Assertion,
+    #esaml_assertion{issue_instant = Issue, recipient = "foobar", subject = #esaml_subject{notonorafter = Death}, conditions = [{audience, "foo"}]} = Assertion,
     {error, bad_recipient} = validate_assertion(E1, "foo", "something"),
     {error, bad_audience} = validate_assertion(E1, "foobar", "something"),
 
@@ -624,7 +694,22 @@ validate_assertion_test() ->
 validate_stale_assertion_test() ->
     Ns = #xmlNamespace{nodes = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
     OldStamp = esaml_util:datetime_to_saml({{1990,1,1}, {1,1,1}}),
+
     E1 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
+        attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}, #xmlAttribute{name = 'Version', value = "2.0"}, #xmlAttribute{name = 'IssueInstant', value = "now"}],
+        content = [
+            #xmlElement{name = 'saml:Subject', content = [
+                #xmlElement{name = 'saml:SubjectConfirmation', content = [
+                    #xmlElement{name = 'saml:SubjectConfirmationData',
+                        attributes = [#xmlAttribute{name = 'Recipient', value = "foobar"}]
+                    } ]} ]},
+
+            #xmlElement{name = 'saml:Conditions',
+                attributes = [#xmlAttribute{name = 'NotOnOrAfter', value = OldStamp}] }]
+    }),
+    {error, stale_assertion} = validate_assertion(E1, "foobar", "foo"),
+
+    E2 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
         attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}, #xmlAttribute{name = 'Version', value = "2.0"}, #xmlAttribute{name = 'IssueInstant', value = "now"}],
         content = [
             #xmlElement{name = 'saml:Subject', content = [
@@ -634,6 +719,60 @@ validate_stale_assertion_test() ->
                                       #xmlAttribute{name = 'NotOnOrAfter', value = OldStamp}]
                     } ]} ]} ]
     }),
-    {error, stale_assertion} = validate_assertion(E1, "foobar", "foo").
+    {error, stale_assertion} = validate_assertion(E2, "foobar", "foo").
+
+validate_early_assertion_test() ->
+    Ns = #xmlNamespace{nodes = [{"saml", 'urn:oasis:names:tc:SAML:2.0:assertion'}]},
+    Now = erlang:localtime_to_universaltime(erlang:localtime()),
+    IssueSecs = calendar:datetime_to_gregorian_seconds(Now),
+    Issue = esaml_util:datetime_to_saml(calendar:gregorian_seconds_to_datetime(IssueSecs)),
+    Future = esaml_util:datetime_to_saml({{2026,1,1}, {1,1,1}}),
+
+    E1 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
+        attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}, #xmlAttribute{name = 'Version', value = "2.0"}, #xmlAttribute{name = 'IssueInstant', value = Issue}],
+        content = [
+            #xmlElement{name = 'saml:Subject', content = [
+                #xmlElement{name = 'saml:SubjectConfirmation', content = [
+                    #xmlElement{name = 'saml:SubjectConfirmationData',
+                        attributes = [#xmlAttribute{name = 'Recipient', value = "foobar"}]
+                    } ]} ]},
+
+            #xmlElement{name = 'saml:Conditions',
+                attributes = [#xmlAttribute{name = 'NotBefore', value = Future}] }]
+    }),
+    {error, early_assertion} = validate_assertion(E1, "foobar", "foo"),
+
+    E2 = esaml_util:build_nsinfo(Ns, #xmlElement{name = 'saml:Assertion',
+        attributes = [#xmlAttribute{name = 'xmlns:saml', value = "urn:oasis:names:tc:SAML:2.0:assertion"}, #xmlAttribute{name = 'Version', value = "2.0"}, #xmlAttribute{name = 'IssueInstant', value = Issue}],
+        content = [
+            #xmlElement{name = 'saml:Subject', content = [
+                #xmlElement{name = 'saml:SubjectConfirmation', content = [
+                    #xmlElement{name = 'saml:SubjectConfirmationData',
+                        attributes = [#xmlAttribute{name = 'Recipient', value = "foobar"},
+                                      #xmlAttribute{name = 'NotBefore', value = Future}]
+                    } ]} ]} ]
+    }),
+    {error, early_assertion} = validate_assertion(E2, "foobar", "foo").
+
+decode_idp_metadata_with_multiple_bindings_test() ->
+    {Doc, _} = xmerl_scan:file("../test/data/okta_metadata.xml"),
+    {ok, IdP} = decode_idp_metadata(Doc),
+    #esaml_idp_metadata{login_location_post = "https://dev-xxx.okta.com/somehash/sso/saml_post"} = IdP,
+    #esaml_idp_metadata{login_location_redirect = "https://dev-xxx.okta.com/somehash/sso/saml_redirect"} = IdP,
+    #esaml_idp_metadata{login_location_artifact = "https://dev-xxx.okta.com/somehash/sso/saml_artifact"} = IdP.
+
+decode_idp_metadata_with_one_certificate_only_test() ->
+    {Doc, _} = xmerl_scan:file("../test/data/okta_metadata.xml"),
+    {ok, IdP} = decode_idp_metadata(Doc),
+    [Cert] = IdP#esaml_idp_metadata.certificates,
+    true = Cert =/= undefined.
+
+decode_idp_metadata_with_multiple_certificates_test() ->
+    {Doc, _} = xmerl_scan:file("../test/data/azure_metadata.xml"),
+    {ok, IdP} = decode_idp_metadata(Doc),
+    [Cert, AnotherCert|_] = IdP#esaml_idp_metadata.certificates,
+    true = Cert =/= undefined,
+    true = AnotherCert =/= undefined,
+    true = Cert =/= AnotherCert.
 
 -endif.
