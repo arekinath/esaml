@@ -22,6 +22,8 @@
 
 -export([verify/1, verify/2, sign/3, strip/1, digest/1]).
 
+-export_type([sig_method/0]).
+
 -include_lib("xmerl/include/xmerl.hrl").
 -include_lib("public_key/include/public_key.hrl").
 
@@ -57,7 +59,7 @@ strip(#xmlElement{content = Kids} = Elem) ->
 sign(ElementIn, PrivateKey = #'RSAPrivateKey'{}, CertBin) when is_binary(CertBin) ->
     sign(ElementIn, PrivateKey, CertBin, "http://www.w3.org/2000/09/xmldsig#rsa-sha1").
 
--spec sign(Element :: #xmlElement{}, PrivateKey :: #'RSAPrivateKey'{}, CertBin :: binary(), SignatureMethod :: sig_method() | sig_method_uri()) -> #xmlElement{}.
+-spec sign(Element :: #xmlElement{}, PrivateKey :: #'RSAPrivateKey'{}, CertBin :: binary(), SignatureMethod :: sig_method() | sig_method_uri() | undefined) -> #xmlElement{}.
 sign(ElementIn, PrivateKey = #'RSAPrivateKey'{}, CertBin, SigMethod) when is_binary(CertBin) ->
     % get rid of any previous signature
     ElementStrip = strip(ElementIn),
@@ -239,6 +241,8 @@ verify(Element) ->
 
 -spec signature_props(atom() | string()) -> {HashFunction :: atom(), DigestMethodUrl :: string(), SignatureMethodUrl :: string()}.
 signature_props("http://www.w3.org/2000/09/xmldsig#rsa-sha1") ->
+    signature_props(rsa_sha1);
+signature_props(undefined) ->
     signature_props(rsa_sha1);
 signature_props(rsa_sha1) ->
     HashFunction = sha,

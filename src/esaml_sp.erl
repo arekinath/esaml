@@ -42,7 +42,7 @@ generate_authn_request(IdpURL, NameIDFormat, SP = #esaml_sp{metadata_uri = MetaU
                                        consumer_location = ConsumeURI,
                                        name_id_format = NameIDFormat}),
     if SP#esaml_sp.sp_sign_requests ->
-        xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
+        xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate, SP#esaml_sp.sp_sign_method);
     true ->
         add_xml_id(Xml)
     end.
@@ -59,7 +59,7 @@ generate_logout_request(IdpURL, NameID, SP = #esaml_sp{metadata_uri = MetaURI}) 
                                        name = NameID,
                                        reason = user}),
     if SP#esaml_sp.sp_sign_requests ->
-        xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
+        xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate, SP#esaml_sp.sp_sign_method);
     true ->
         add_xml_id(Xml)
     end.
@@ -75,7 +75,7 @@ generate_logout_response(IdpURL, Status, SP = #esaml_sp{metadata_uri = MetaURI})
                                        issuer = MetaURI,
                                        status = Status}),
     if SP#esaml_sp.sp_sign_requests ->
-        xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate);
+        xmerl_dsig:sign(Xml, SP#esaml_sp.key, SP#esaml_sp.certificate, SP#esaml_sp.sp_sign_method);
     true ->
         add_xml_id(Xml)
     end.
